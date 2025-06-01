@@ -1,130 +1,106 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/content_card.dart';
-import '../services/mock_data_service.dart'; // Assuming mock service is used for now
-import 'detail_screen.dart'; // Assuming navigation to DetailScreen
-import 'filter_screen.dart'; // Assuming a FilterScreen exists
+import '../screens/detail_screen.dart';
+import 'filter_screen.dart';
+import '../services/api_service.dart';
+import 'dart:async';
 
 class MoviesScreen extends StatefulWidget {
-  const MoviesScreen({Key? key}) : super(key: key);
+  const MoviesScreen({super.key});
 
   @override
-  _MoviesScreenState createState() => _MoviesScreenState();
+  State<MoviesScreen> createState() => _MoviesScreenState();
 }
 
 class _MoviesScreenState extends State<MoviesScreen>
     with SingleTickerProviderStateMixin {
-  TabController? _tabController;
-  final List<String> _tabs = ['Latest', 'Trending', 'Popular', 'Filter'];
-  final MockDataService _mockService = MockDataService();
-
-  List<dynamic> _latestMovies = [];
-  List<dynamic> _trendingMovies = [];
-  List<dynamic> _popularMovies = [];
+  final ApiService _apiService = ApiService();
+  List<dynamic> _movies = [];
   bool _isLoading = true;
   String? _errorMessage;
+  StreamSubscription? _moviesSubscription;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    _loadMoviesContent();
+    _loadMovies();
   }
 
   @override
   void dispose() {
-    _tabController?.dispose();
+    _moviesSubscription?.cancel();
     super.dispose();
   }
 
-  void _loadMoviesContent() {
+  void _loadMovies() {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    _mockService.init(); // Ensure mock service is initialized
-
-    // Listen to the latest content stream and filter for Movies
-    _mockService.latestContent.listen(
-      (content) {
-        if (mounted) {
-          setState(() {
-            _latestMovies =
-                content.where((item) => item['type'] == 'Movie').toList();
-            // _isLoading = false; // Only set to false after all content types are loaded if preferred
-          });
-        }
+    _moviesSubscription = _apiService
+        .connectToContentWebSocket(
+      type: 'collection',
+      collectionId: 'movies',
+    )
+        .listen(
+      (data) {
+        setState(() {
+          _isLoading = false;
+          if (data is List) {
+            _movies = data;
+          } else if (data is Map &&
+              data.containsKey('results') &&
+              data['results'] is List) {
+            _movies = data['results'];
+          } else if (data is Map) {
+            _movies = [data];
+          } else {
+            _movies = [];
+            _errorMessage = 'Unexpected data format for movies.';
+          }
+        });
       },
       onError: (error) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Error loading latest movies: $error';
-            _isLoading = false;
-          });
-        }
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load movies: $error';
+          _movies = [];
+        });
+        print('Movies WebSocket error: $error');
+      },
+      onDone: () {
+        print('Movies WebSocket disconnected.');
       },
     );
-
-    // Listen to the trending content stream and filter for Movies
-    _mockService.trendingContent.listen((content) {
-      if (mounted) {
-        setState(() {
-          _trendingMovies =
-              content.where((item) => item['type'] == 'Movie').toList();
-          // _isLoading = false;
-        });
-      }
-    });
-    onError:
-    (error) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error loading trending movies: $error';
-          _isLoading = false;
-        });
-      }
-    };
-
-    // Listen to the popular content stream and filter for Movies
-    _mockService.popularContent.listen((content) {
-      if (mounted) {
-        setState(() {
-          _popularMovies =
-              content.where((item) => item['type'] == 'Movie').toList();
-          _isLoading =
-              false; // Set to false after the last content type is loaded
-        });
-      }
-    });
-    onError:
-    (error) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error loading popular movies: $error';
-          _isLoading = false;
-        });
-      }
-    };
   }
 
   void _openFilterScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const FilterScreen()),
-    ); // Assuming FilterScreen exists
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Movies'),
+        title: const Text(
+          'Movies',
+          style: TextStyle(
+            color: AppTheme.textColorPrimary,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // TODO: Implement search functionality for Movies
+              // TODO: Implement search functionality (or navigate to SearchScreen)
+              print('Search tapped from MoviesScreen');
             },
           ),
           IconButton(
@@ -132,99 +108,58 @@ class _MoviesScreenState extends State<MoviesScreen>
             onPressed: _openFilterScreen,
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: _tabs.map((String tab) => Tab(text: tab)).toList(),
-          indicatorColor: AppTheme.primaryColor,
-          labelColor: AppTheme.primaryColor,
-          unselectedLabelColor: AppTheme.textColorSecondary,
-        ),
+        backgroundColor: AppTheme.backgroundColor,
+        elevation: 0,
       ),
-      body:
-          _isLoading
-              ? const Center(
-                child: CircularProgressIndicator(color: AppTheme.primaryColor),
-              )
-              : _errorMessage != null
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor),
+            )
+          : _errorMessage != null
               ? Center(
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: AppTheme.errorColor),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: AppTheme.errorColor),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.7,
+                        ),
+                        itemCount: _movies.length,
+                        itemBuilder: (context, index) {
+                          final movie = _movies[index];
+                          return ContentCard(
+                            imageUrl: movie['poster_url'] ??
+                                'https://via.placeholder.com/300x450',
+                            title: movie['title'] ?? 'No Title',
+                            quality: movie['quality'] ?? 'HD',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      DetailScreen(content: movie),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              )
-              : TabBarView(
-                controller: _tabController,
-                children: [
-                  // Latest Movies Tab
-                  _buildContentGrid(
-                    _latestMovies,
-                  ), // Need to implement _buildContentGrid
-                  // Trending Movies Tab
-                  _buildContentGrid(_trendingMovies),
-                  // Popular Movies Tab
-                  _buildContentGrid(_popularMovies),
-                  // Filter Tab Placeholder
-                  const Center(child: Text('Filter Options Placeholder')),
-                ],
-              ),
-    );
-  }
-
-  Widget _buildContentGrid(List<dynamic> items) {
-    if (items.isEmpty) {
-      return const Center(
-        child: Text(
-          'No content available.',
-          style: TextStyle(color: AppTheme.textColorSecondary),
-        ),
-      );
-    }
-
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // As per your screenshot
-        childAspectRatio: 0.6, // Adjusted aspect ratio, can be fine-tuned
-        crossAxisSpacing: 12, // Spacing as seen in screenshots
-        mainAxisSpacing: 12, // Spacing as seen in screenshots
-      ),
-      itemCount: items.length,
-      padding: const EdgeInsets.all(8), // Padding around the grid
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => DetailScreen(
-                      content: item,
-                    ), // Assuming DetailScreen is used
-              ),
-            );
-          },
-          child: ContentCard(
-            imageUrl:
-                item['poster_url'] ??
-                item['imageUrl'] ??
-                'https://via.placeholder.com/300x450', // Use poster_url if available, fallback to imageUrl
-            title: item['title'] ?? 'No Title',
-            quality: item['quality'] ?? 'HD',
-            showDetails: true,
-            // Pass width and height based on desired grid item size, or let ContentCard size itself
-            width: 110, // Example width, adjust as needed
-            height: 160, // Example height, adjust as needed
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DetailScreen(content: item),
-                ),
-              );
-            }, // Pass the onTap callback
-          ),
-        );
-      },
     );
   }
 }

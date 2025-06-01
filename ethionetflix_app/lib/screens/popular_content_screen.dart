@@ -6,9 +6,15 @@ import 'detail_screen.dart'; // Assuming navigation to DetailScreen
 
 class PopularContentScreen extends StatefulWidget {
   final int initialTabIndex;
+  final String title;
+  final List<dynamic> contentList;
 
-  const PopularContentScreen({Key? key, this.initialTabIndex = 0})
-    : super(key: key);
+  const PopularContentScreen({
+    Key? key,
+    this.initialTabIndex = 0,
+    required this.title,
+    required this.contentList,
+  }) : super(key: key);
 
   @override
   _PopularContentScreenState createState() => _PopularContentScreenState();

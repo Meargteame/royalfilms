@@ -15,7 +15,8 @@ class DetailScreen extends StatefulWidget {
   State<DetailScreen> createState() => _DetailScreenState();
 }
 
-class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderStateMixin {
+class _DetailScreenState extends State<DetailScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final List<String> _tabs = ['Overview', 'Casts', 'Related'];
   bool _isInList = false;
@@ -84,7 +85,8 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
                             Row(
                               children: [
                                 Text(
-                                  widget.content['release_year']?.toString() ?? '',
+                                  widget.content['release_year']?.toString() ??
+                                      '',
                                   style: const TextStyle(
                                     color: AppTheme.textColorSecondary,
                                     fontSize: 14,
@@ -130,13 +132,23 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
 
                 // Action buttons
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            // Play video
+                            // Removed API call and navigation to VideoPlayerScreen
+                            print(
+                                'Watch button tapped! (No actual playback in UI-only mode)');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Video playback not available in UI-only mode.'),
+                                backgroundColor: AppTheme.primaryColor,
+                              ),
+                            );
                           },
                           icon: const Icon(Icons.play_arrow),
                           label: const Text('Watch'),
@@ -151,11 +163,18 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            // Show download quality options
-                            _showDownloadOptions(context);
+                            // TODO: Implement Watch List functionality
+                            print('Add to Watch List button tapped!');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Add to Watch List not implemented in UI-only mode.'),
+                                backgroundColor: AppTheme.primaryColor,
+                              ),
+                            );
                           },
-                          icon: const Icon(Icons.download),
-                          label: const Text('Download'),
+                          icon: const Icon(Icons.bookmark_add_outlined),
+                          label: const Text('Watch List'),
                           style: ElevatedButton.styleFrom(
                             foregroundColor: AppTheme.buttonTextColor,
                             backgroundColor: AppTheme.primaryColor,
@@ -174,7 +193,9 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildIconButton(
-                        icon: _isInList ? Icons.playlist_add_check : Icons.playlist_add,
+                        icon: _isInList
+                            ? Icons.playlist_add_check
+                            : Icons.playlist_add,
                         label: 'Add List',
                         onTap: () {
                           setState(() {
@@ -330,7 +351,8 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Genre
-          if (widget.content['genres'] != null && (widget.content['genres'] as List).isNotEmpty)
+          if (widget.content['genres'] != null &&
+              (widget.content['genres'] as List).isNotEmpty)
             Wrap(
               spacing: 8,
               children: (widget.content['genres'] as List).map((genre) {
@@ -375,9 +397,11 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
             const SizedBox(height: 16),
             _buildInfoRow('Duration', '${widget.content['duration']} min'),
           ],
-          if (widget.content['countries'] != null && (widget.content['countries'] as List).isNotEmpty) ...[
+          if (widget.content['countries'] != null &&
+              (widget.content['countries'] as List).isNotEmpty) ...[
             const SizedBox(height: 8),
-            _buildInfoRow('Country', (widget.content['countries'] as List).join(', ')),
+            _buildInfoRow(
+                'Country', (widget.content['countries'] as List).join(', ')),
           ],
         ],
       ),
@@ -499,7 +523,13 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
         'poster_url': 'https://via.placeholder.com/300x450?text=Mitchells',
         'type': 'Movie',
         'release_year': 2021,
-        'genres': ['Animation', 'Science Fiction', 'Adventure', 'Family', 'Comedy'],
+        'genres': [
+          'Animation',
+          'Science Fiction',
+          'Adventure',
+          'Family',
+          'Comedy'
+        ],
         'country': 'United States of America',
       },
       {
@@ -531,7 +561,8 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
                 width: 60,
                 height: 90,
                 color: AppTheme.surfaceColor,
-                child: const Icon(Icons.broken_image, color: AppTheme.textColorTertiary),
+                child: const Icon(Icons.broken_image,
+                    color: AppTheme.textColorTertiary),
               ),
             ),
           ),
@@ -547,18 +578,21 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
             children: [
               Text(
                 '${item['type']} • ${item['release_year']} • ${item['country']}',
-                style: const TextStyle(color: AppTheme.textColorSecondary, fontSize: 12),
+                style: const TextStyle(
+                    color: AppTheme.textColorSecondary, fontSize: 12),
               ),
               const SizedBox(height: 4),
               Text(
                 (item['genres'] as List).join(', '),
-                style: const TextStyle(color: AppTheme.textColorTertiary, fontSize: 12),
+                style: const TextStyle(
+                    color: AppTheme.textColorTertiary, fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           onTap: () {
             // Navigate to content details
             Navigator.push(
@@ -568,75 +602,6 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
               ),
             );
           },
-        );
-      },
-    );
-  }
-
-  void _showDownloadOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.backgroundColor,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Download "${widget.content['title']}"',
-                  style: const TextStyle(
-                    color: AppTheme.textColorPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const Divider(height: 1, color: AppTheme.surfaceColor),
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Choose quality',
-                  style: TextStyle(
-                    color: AppTheme.textColorPrimary,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              _buildQualityOption(context, 'SD 360p', 'MP4', 220),
-              _buildQualityOption(context, 'HD 720p', 'MP4', 450),
-              _buildQualityOption(context, 'FHD 1080p', 'MP4', 880),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildQualityOption(BuildContext context, String quality, String format, int sizeMB) {
-    return ListTile(
-      leading: const Icon(Icons.download, color: AppTheme.primaryColor),
-      title: Text(
-        quality,
-        style: const TextStyle(color: AppTheme.textColorPrimary),
-      ),
-      subtitle: Text(
-        '$format • ${sizeMB}MB',
-        style: const TextStyle(color: AppTheme.textColorSecondary),
-      ),
-      trailing: const Icon(Icons.chevron_right, color: AppTheme.textColorSecondary),
-      onTap: () {
-        Navigator.pop(context);
-        // Start download process
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Downloading ${widget.content['title']} in $quality'),
-            backgroundColor: AppTheme.primaryColor.withOpacity(0.8),
-            behavior: SnackBarBehavior.floating,
-          ),
         );
       },
     );
@@ -705,8 +670,10 @@ class _DetailScreenState extends State<DetailScreen> with SingleTickerProviderSt
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Report submitted for ${widget.content['title']}'),
-                          backgroundColor: AppTheme.primaryColor.withOpacity(0.8),
+                          content: Text(
+                              'Report submitted for ${widget.content['title']}'),
+                          backgroundColor:
+                              AppTheme.primaryColor.withOpacity(0.8),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );

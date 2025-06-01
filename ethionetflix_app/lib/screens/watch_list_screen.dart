@@ -1,66 +1,121 @@
 import 'package:flutter/material.dart';
+// import '../services/api_service.dart'; // Removed
+import '../config/app_theme.dart';
+import '../widgets/content_card.dart';
+import '../screens/detail_screen.dart';
 
 class WatchListScreen extends StatefulWidget {
-  const WatchListScreen({Key? key}) : super(key: key);
+  const WatchListScreen({super.key});
 
   @override
-  _WatchListScreenState createState() => _WatchListScreenState();
+  State<WatchListScreen> createState() => _WatchListScreenState();
 }
 
 class _WatchListScreenState extends State<WatchListScreen>
     with SingleTickerProviderStateMixin {
-  TabController? _tabController;
-  final List<String> _tabs = ['Movie', 'TV Series', 'Trakt'];
+  // final ApiService _apiService = ApiService(); // Removed
+  List<dynamic> _watchListContent = [
+    {
+      'title': 'Dummy WatchList Item 1',
+      'poster_url': 'https://via.placeholder.com/300x450?text=Watchlist+1',
+      'quality': 'HD',
+      'imdb_rating': 7.5,
+      'release_year': 2020,
+      'duration': 90,
+      'description': 'This is a dummy item in your watchlist.',
+    },
+    {
+      'title': 'Dummy WatchList Item 2',
+      'poster_url': 'https://via.placeholder.com/300x450?text=Watchlist+2',
+      'quality': 'FHD',
+      'imdb_rating': 8.1,
+      'release_year': 2021,
+      'duration': 105,
+      'description': 'This is another dummy item in your watchlist.',
+    },
+  ];
+  bool _isLoading = false; // Set to false, no more loading from API
+  String? _errorMessage; // No more error messages from API
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    // _setupWebSocket(); // Removed
   }
 
   @override
   void dispose() {
-    _tabController?.dispose();
+    // _apiService.dispose(); // Removed
     super.dispose();
+  }
+
+  void _setupWebSocket() {
+    // All WebSocket logic removed
+  }
+
+  void _loadWatchListContent() {
+    // All API loading logic removed
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Watch List'),
+        title: const Text(
+          'Watch List',
+          style: TextStyle(
+            color: AppTheme.textColorPrimary,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
               // TODO: Implement search functionality for Watch List
+              print('Search tapped from WatchListScreen');
             },
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: _tabs.map((String tab) => Tab(text: tab)).toList(),
-          indicatorColor:
-              Theme.of(context).tabBarTheme.indicatorColor, // Use theme colors
-          labelColor: Theme.of(context).tabBarTheme.labelColor,
-          unselectedLabelColor:
-              Theme.of(context).tabBarTheme.unselectedLabelColor,
-        ),
+        backgroundColor: AppTheme.backgroundColor,
+        elevation: 0,
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children:
-            _tabs.map((String tab) {
-              // Placeholder content for each tab
-              return Center(
-                child: Text(
-                  '${tab} Watch List Content Placeholder',
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ), // Use theme colors
-                ),
-              );
-            }).toList(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.7,
+              ),
+              itemCount: _watchListContent.length,
+              itemBuilder: (context, index) {
+                final item = _watchListContent[index];
+                return ContentCard(
+                  imageUrl: item['poster_url'] ??
+                      'https://via.placeholder.com/300x450',
+                  title: item['title'] ?? 'No Title',
+                  quality: item['quality'] ?? 'HD',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DetailScreen(content: item),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
