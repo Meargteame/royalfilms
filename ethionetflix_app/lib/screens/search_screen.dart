@@ -5,10 +5,18 @@ import '../widgets/content_card.dart';
 import '../screens/detail_screen.dart';
 import '../screens/filter_screen.dart'; // Import FilterScreen
 import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 import 'dart:async';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final ApiService apiService;
+  final LocalStorageService localStorageService;
+  
+  const SearchScreen({
+    required this.apiService,
+    required this.localStorageService,
+    super.key,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -16,7 +24,8 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
+  late final LocalStorageService _localStorageService;
   List<dynamic> _searchResults = [];
   bool _isLoading = false;
   String? _errorMessage;
@@ -25,6 +34,8 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    _apiService = widget.apiService;
+    _localStorageService = widget.localStorageService;
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -114,7 +125,7 @@ class _SearchScreenState extends State<SearchScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const FilterScreen(),
+                  builder: (context) => FilterScreen(apiService: _apiService),
                 ),
               );
             },
@@ -201,7 +212,11 @@ class _SearchScreenState extends State<SearchScreen> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (context) =>
-                                              DetailScreen(content: item),
+                                              DetailScreen(
+                                                content: item,
+                                                apiService: _apiService,
+                                                localStorageService: _localStorageService,
+                                              ),
                                         ),
                                       );
                                     },

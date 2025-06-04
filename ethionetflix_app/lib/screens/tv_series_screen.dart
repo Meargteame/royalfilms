@@ -3,11 +3,20 @@ import '../config/app_theme.dart';
 import '../widgets/content_card.dart';
 import '../screens/detail_screen.dart';
 import 'filter_screen.dart';
+import 'search_screen.dart';
 import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 import 'dart:async';
 
 class TvSeriesScreen extends StatefulWidget {
-  const TvSeriesScreen({super.key});
+  final ApiService apiService;
+  final LocalStorageService localStorageService;
+  
+  const TvSeriesScreen({
+    required this.apiService,
+    required this.localStorageService,
+    super.key,
+  });
 
   @override
   State<TvSeriesScreen> createState() => _TvSeriesScreenState();
@@ -15,7 +24,7 @@ class TvSeriesScreen extends StatefulWidget {
 
 class _TvSeriesScreenState extends State<TvSeriesScreen>
     with SingleTickerProviderStateMixin {
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
   List<dynamic> _tvSeries = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -24,6 +33,7 @@ class _TvSeriesScreenState extends State<TvSeriesScreen>
   @override
   void initState() {
     super.initState();
+    _apiService = widget.apiService;
     _loadTvSeries();
   }
 
@@ -42,23 +52,31 @@ class _TvSeriesScreenState extends State<TvSeriesScreen>
     _tvSeriesSubscription = _apiService
         .connectToContentWebSocket(
       type: 'collection',
-      collectionId: 'tv_series',
+      collectionId: 'all',
     )
         .listen(
       (data) {
         setState(() {
           _isLoading = false;
+          List<dynamic> allContent = [];
           if (data is List) {
-            _tvSeries = data;
+            allContent = data;
           } else if (data is Map &&
               data.containsKey('results') &&
               data['results'] is List) {
-            _tvSeries = data['results'];
+            allContent = data['results'];
           } else if (data is Map) {
-            _tvSeries = [data];
-          } else {
-            _tvSeries = [];
-            _errorMessage = 'Unexpected data format for TV series.';
+            allContent = [data];
+          }
+          
+          // Filter only TV series content
+          _tvSeries = allContent.where((item) {
+            final type = item['type']?.toString().toLowerCase() ?? '';
+            return type == 'tv' || type == 'series' || type == 'show';
+          }).toList();
+          
+          if (_tvSeries.isEmpty && allContent.isNotEmpty) {
+            _errorMessage = 'No TV series found in the content.';
           }
         });
       },
@@ -79,7 +97,7 @@ class _TvSeriesScreenState extends State<TvSeriesScreen>
   void _openFilterScreen() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const FilterScreen()),
+      MaterialPageRoute(builder: (context) => FilterScreen(apiService: _apiService)),
     );
   }
 
@@ -99,8 +117,15 @@ class _TvSeriesScreenState extends State<TvSeriesScreen>
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // TODO: Implement search functionality (or navigate to SearchScreen)
-              print('Search tapped from TvSeriesScreen');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SearchScreen(
+                    apiService: _apiService,
+                    localStorageService: widget.localStorageService,
+                  ),
+                ),
+              );
             },
           ),
           IconButton(
@@ -149,8 +174,11 @@ class _TvSeriesScreenState extends State<TvSeriesScreen>
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      DetailScreen(content: series),
+                                  builder: (context) => DetailScreen(
+                                    content: series,
+                                    apiService: _apiService,
+                                    localStorageService: widget.localStorageService,
+                                  ),
                                 ),
                               );
                             },

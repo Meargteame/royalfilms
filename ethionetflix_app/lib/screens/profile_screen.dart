@@ -2,9 +2,18 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import 'subscription_screen.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final ApiService? apiService;
+  final LocalStorageService? localStorageService;
+  
+  const ProfileScreen({
+    super.key,
+    this.apiService,
+    this.localStorageService,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -87,7 +96,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const SubscriptionScreen(),
+                    builder: (context) => SubscriptionScreen(
+                      apiService: widget.apiService,
+                      localStorageService: widget.localStorageService,
+                    ),
                   ),
                 );
               },

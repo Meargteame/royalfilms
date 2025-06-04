@@ -2,9 +2,18 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/logo.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  final ApiService? apiService;
+  final LocalStorageService? localStorageService;
+  
+  const SettingsScreen({
+    super.key, 
+    this.apiService,
+    this.localStorageService,
+  });
 
   @override
   Widget build(BuildContext context) {

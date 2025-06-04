@@ -1,14 +1,15 @@
 // lib/config/app_theme.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Main colors
   static const Color primaryColor = Color(0xFFE5FF00); // Yellow accent color
-  static const Color backgroundColor =
-      Color(0xFF000000); // Pure black background
-  static const Color cardColor =
-      Color(0xFF121212); // Slightly lighter black for cards
+  static const Color backgroundColor = Color(
+    0xFF000000,
+  ); // Pure black background
+  static const Color cardColor = Color(
+    0xFF121212,
+  ); // Slightly lighter black for cards
   static const Color surfaceColor = Color(0xFF1E1E1E); // Dark surface color
 
   // Text colors
@@ -25,18 +26,12 @@ class AppTheme {
 
   // Button colors
   static const Color buttonColor = primaryColor;
-  static const Color buttonTextColor =
-      Color(0xFF000000); // Black text on yellow buttons
+  static const Color buttonTextColor = Color(
+    0xFF000000,
+  ); // Black text on yellow buttons
 
   // Create the theme data
   static ThemeData get darkTheme {
-    final textTheme = GoogleFonts.robotoTextTheme(
-      ThemeData.dark().textTheme,
-    ).apply(
-      bodyColor: textColorPrimary,
-      displayColor: textColorPrimary,
-    );
-
     return ThemeData.dark().copyWith(
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColor,
@@ -48,16 +43,16 @@ class AppTheme {
         background: backgroundColor,
         error: errorColor,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: backgroundColor,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: textTheme.titleLarge?.copyWith(
+        titleTextStyle: TextStyle(
           color: textColorPrimary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
-        iconTheme: const IconThemeData(color: textColorPrimary),
+        iconTheme: IconThemeData(color: textColorPrimary),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: backgroundColor,
@@ -66,34 +61,25 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
-      textTheme: textTheme.copyWith(
-        titleLarge: textTheme.titleLarge?.copyWith(
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(
           color: textColorPrimary,
           fontSize: 22,
           fontWeight: FontWeight.bold,
         ),
-        titleMedium: textTheme.titleMedium?.copyWith(
+        titleMedium: TextStyle(
           color: textColorPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w500,
         ),
-        titleSmall: textTheme.titleSmall?.copyWith(
+        titleSmall: TextStyle(
           color: textColorPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w500,
         ),
-        bodyLarge: textTheme.bodyLarge?.copyWith(
-          color: textColorPrimary,
-          fontSize: 16,
-        ),
-        bodyMedium: textTheme.bodyMedium?.copyWith(
-          color: textColorSecondary,
-          fontSize: 14,
-        ),
-        bodySmall: textTheme.bodySmall?.copyWith(
-          color: textColorTertiary,
-          fontSize: 12,
-        ),
+        bodyLarge: TextStyle(color: textColorPrimary, fontSize: 16),
+        bodyMedium: TextStyle(color: textColorSecondary, fontSize: 14),
+        bodySmall: TextStyle(color: textColorTertiary, fontSize: 12),
       ),
       tabBarTheme: const TabBarTheme(
         labelColor: primaryColor,
@@ -104,14 +90,9 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: buttonTextColor,
-          textStyle: textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -119,9 +100,7 @@ class AppTheme {
           foregroundColor: textColorPrimary,
           side: const BorderSide(color: textColorPrimary),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       checkboxTheme: CheckboxThemeData(
@@ -132,19 +111,12 @@ class AppTheme {
           return surfaceColor;
         }),
         checkColor: MaterialStateProperty.all(buttonTextColor),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: primaryColor,
-        ),
+        style: TextButton.styleFrom(foregroundColor: primaryColor),
       ),
-      dividerTheme: const DividerThemeData(
-        color: surfaceColor,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: surfaceColor, thickness: 1),
     );
   }
 }

@@ -17,8 +17,9 @@ class ContentItem {
   final List<String>? genres;
   final List<String>? countries;
   
+  // Make releaseYear dynamic to handle both string and int types
   @JsonKey(name: 'release_year')
-  final int? releaseYear;
+  final dynamic releaseYear;
   
   @JsonKey(name: 'imdb_rating')
   final double? imdbRating;
@@ -28,6 +29,9 @@ class ContentItem {
   // Fields for collections and related content
   @JsonKey(name: 'collection_id')
   final String? collectionId;
+  
+  @JsonKey(name: 'trailer_url')
+  final String? trailerUrl;
   
   ContentItem({
     this.id,
@@ -42,6 +46,7 @@ class ContentItem {
     this.imdbRating,
     this.duration,
     this.collectionId,
+    this.trailerUrl,
   });
 
   factory ContentItem.fromJson(Map<String, dynamic> json) => _$ContentItemFromJson(json);

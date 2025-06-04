@@ -2,18 +2,24 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/content_card.dart';
 import '../services/mock_data_service.dart'; // Assuming mock service is used for now
-import 'detail_screen.dart'; // Assuming navigation to DetailScreen
+import 'detail_screen.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 
 class PopularContentScreen extends StatefulWidget {
   final int initialTabIndex;
   final String title;
   final List<dynamic> contentList;
+  final ApiService apiService;
+  final LocalStorageService localStorageService;
 
   const PopularContentScreen({
     Key? key,
     this.initialTabIndex = 0,
     required this.title,
     required this.contentList,
+    required this.apiService,
+    required this.localStorageService,
   }) : super(key: key);
 
   @override
@@ -236,7 +242,11 @@ class _PopularContentScreenState extends State<PopularContentScreen>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DetailScreen(content: item),
+                builder: (context) => DetailScreen(
+                  content: item,
+                  apiService: widget.apiService,
+                  localStorageService: widget.localStorageService,
+                ),
               ),
             );
           },
@@ -252,7 +262,11 @@ class _PopularContentScreenState extends State<PopularContentScreen>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => DetailScreen(content: item),
+                  builder: (context) => DetailScreen(
+                  content: item,
+                  apiService: widget.apiService,
+                  localStorageService: widget.localStorageService,
+                ),
                 ),
               );
             }, // Pass the onTap callback

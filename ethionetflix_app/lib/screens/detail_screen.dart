@@ -1,40 +1,284 @@
 // lib/screens/detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../config/app_theme.dart';
-import '../widgets/content_card.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
+import '../models/content_item.dart';
+import 'video_player_screen.dart';
 
 class DetailScreen extends StatefulWidget {
   final Map<String, dynamic> content;
+  final ApiService apiService;
+  final LocalStorageService localStorageService;
 
   const DetailScreen({
     Key? key,
     required this.content,
+    required this.apiService,
+    required this.localStorageService,
   }) : super(key: key);
 
   @override
   State<DetailScreen> createState() => _DetailScreenState();
 }
 
-class _DetailScreenState extends State<DetailScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final List<String> _tabs = ['Overview', 'Casts', 'Related'];
+class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMixin {
+  late ContentItem _contentItem;
   bool _isInList = false;
+  bool _isDownloaded = false;
+  bool _isDownloading = false;
+  TabController? _tabController;
+  final ScrollController _scrollController = ScrollController();
+  final List<String> _tabs = ['Overview', 'Casts', 'Related'];
 
   @override
   void initState() {
     super.initState();
+    _convertToContentItem();
+    _checkIfDownloaded();
+    
+    // Initialize TabController after content item is created
     _tabController = TabController(length: _tabs.length, vsync: this);
+  }
+  
+  void _convertToContentItem() {
+  try {
+    // Handle all possible ID field names (id, movieId)
+    final contentId = widget.content['id'] ?? widget.content['movieId'] ?? widget.content['_id'] ?? 'unknown_id';
+    
+    // Print debug info to help identify the structure
+    print('Content data: ${widget.content}');
+    print('Extracted ID: $contentId');
+    
+    // Handle possible title field names
+    final title = widget.content['title'] ?? 
+                widget.content['name'] ?? 
+                widget.content['seriesName'] ?? 
+                'No Title';
+    
+    // Handle possible collection ID field names
+    final collectionId = widget.content['collection_id'] ?? 
+                        widget.content['collectionId'] ?? 
+                        'all';
+    
+    // Handle poster URL with same logic as in the ContentCard
+    final posterUrl = widget.content['thumbNail'] != null && widget.content['thumbNail'].toString().isNotEmpty
+      ? widget.content['thumbNail'].toString().startsWith('http')
+        ? widget.content['thumbNail'].toString()
+        : widget.content['thumbNail'].toString().startsWith('/thumbnails')
+          ? 'https://ethionetflix.hopto.org${widget.content['thumbNail']}'
+          : widget.content['thumbNail'].toString()
+      : widget.content['poster_url'] ?? 'https://via.placeholder.com/800x450';
+    
+    // Safely convert release year to the correct type
+    dynamic releaseYear;
+    if (widget.content['release_year'] != null) {
+      releaseYear = widget.content['release_year'];
+    } else if (widget.content['year'] != null) {
+      releaseYear = widget.content['year'];
+    }
+    
+    // Safely convert imdb rating
+    double? imdbRating;
+    if (widget.content['imdb_rating'] != null) {
+      try {
+        if (widget.content['imdb_rating'] is String) {
+          imdbRating = double.tryParse(widget.content['imdb_rating']);
+        } else if (widget.content['imdb_rating'] is num) {
+          imdbRating = (widget.content['imdb_rating'] as num).toDouble();
+        }
+      } catch (e) {
+        print('Error converting IMDB rating: $e');
+      }
+    } else if (widget.content['rating'] != null) {
+      try {
+        // Some content has rating in format '5.9/10'
+        String ratingStr = widget.content['rating'].toString();
+        if (ratingStr.contains('/')) {
+          ratingStr = ratingStr.split('/')[0];
+        }
+        imdbRating = double.tryParse(ratingStr);
+      } catch (e) {
+        print('Error converting rating: $e');
+      }
+    }
+    
+    // Safely convert duration
+    int? duration;
+    if (widget.content['duration'] != null) {
+      try {
+        if (widget.content['duration'] is int) {
+          duration = widget.content['duration'];
+        } else if (widget.content['duration'] is String) {
+          duration = int.tryParse(widget.content['duration']);
+        }
+      } catch (e) {
+        print('Error converting duration: $e');
+      }
+    }
+    
+    // Get trailer URL from various possible sources
+    String? trailerUrl;
+    final trailerField = widget.content['trailer_url'] ?? 
+                     widget.content['trailerUrl'] ?? 
+                     widget.content['trailer'];
+    
+    if (trailerField != null) {
+      if (trailerField is List) {
+        // If trailer is a list, take the first item if available
+        trailerUrl = trailerField.isNotEmpty ? trailerField[0].toString() : null;
+      } else {
+        trailerUrl = trailerField.toString();
+      }
+    }
+    
+    // Handle description which might be a List or a String
+    String? description;
+    if (widget.content['description'] != null) {
+      if (widget.content['description'] is List) {
+        // Join list elements into a single string
+        description = (widget.content['description'] as List).join(', ');
+      } else {
+        description = widget.content['description'].toString();
+      }
+    }
+    
+    // Handle genre which might be a List or a String
+    List<String>? genres;
+    if (widget.content['genres'] != null) {
+      if (widget.content['genres'] is List) {
+        genres = (widget.content['genres'] as List).map((e) => e.toString()).toList().cast<String>();
+      }
+    } else if (widget.content['genre'] != null) {
+      if (widget.content['genre'] is List) {
+        genres = (widget.content['genre'] as List).map((e) => e.toString()).toList().cast<String>();
+      } else if (widget.content['genre'] is String) {
+        // Split comma-separated genres
+        genres = widget.content['genre'].toString().split(',').map((e) => e.trim()).toList();
+      }
+    }
+    
+    // Handle countries which might be a List or a String
+    List<String>? countries;
+    if (widget.content['countries'] != null) {
+      if (widget.content['countries'] is List) {
+        countries = (widget.content['countries'] as List).map((e) => e.toString()).toList().cast<String>();
+      }
+    } else if (widget.content['country'] != null) {
+      if (widget.content['country'] is List) {
+        countries = (widget.content['country'] as List).map((e) => e.toString()).toList().cast<String>();
+      } else if (widget.content['country'] is String) {
+        // Split comma-separated countries
+        countries = widget.content['country'].toString().split(',').map((e) => e.trim()).toList();
+      }
+    }
+    
+    _contentItem = ContentItem(
+      id: contentId?.toString(),
+      title: title,
+      description: description,
+      posterUrl: posterUrl,
+      type: widget.content['type']?.toString(),
+      quality: widget.content['quality']?.toString(),
+      genres: genres,
+      countries: countries,
+      releaseYear: releaseYear,
+      imdbRating: imdbRating,
+      duration: duration,
+      collectionId: collectionId,
+      trailerUrl: trailerUrl,
+    );
+    
+    print('Converted ContentItem: ${_contentItem.toJson()}');
+  } catch (e) {
+    print('Error in _convertToContentItem: $e');
+    // Create a fallback content item to avoid crashes
+    _contentItem = ContentItem(
+      id: 'fallback_id',
+      title: 'Error Loading Content',
+      description: 'There was an error loading this content. Please try again.',
+      posterUrl: 'https://via.placeholder.com/800x450',
+      type: 'unknown',
+      quality: 'unknown',
+      collectionId: 'all',
+    );
+  }
+}
+  
+  Future<void> _checkIfDownloaded() async {
+    if (_contentItem.id != null) {
+      final isDownloaded = await widget.localStorageService
+          .isContentDownloaded(_contentItem.id!);
+      if (mounted) {
+        setState(() {
+          _isDownloaded = isDownloaded;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  // Error screen displayed when content fails to load
+  Widget _buildErrorScreen(String message) {
+    return Scaffold(
+      backgroundColor: Colors.black87,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 80,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Error handling - display error UI if content is not valid
+    if (widget.content.isEmpty) {
+      return _buildErrorScreen('Invalid content data');
+    }
+    
+    // Check if content ID is missing
+    if (_contentItem.id == null || _contentItem.id!.isEmpty) {
+      return _buildErrorScreen('Invalid content ID');
+    }
+    
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -74,7 +318,7 @@ class _DetailScreenState extends State<DetailScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.content['title'] ?? 'No Title',
+                              _contentItem.title ?? 'No Title',
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -84,15 +328,15 @@ class _DetailScreenState extends State<DetailScreen>
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Text(
-                                  widget.content['release_year']?.toString() ??
-                                      '',
-                                  style: const TextStyle(
-                                    color: AppTheme.textColorSecondary,
-                                    fontSize: 14,
+                                if (_contentItem.releaseYear != null)
+                                  Text(
+                                    _contentItem.releaseYear.toString(),
+                                    style: const TextStyle(
+                                      color: AppTheme.textColorSecondary,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                ),
-                                if (widget.content['imdb_rating'] != null) ...[
+                                if (_contentItem.imdbRating != null) ...[
                                   const SizedBox(width: 8),
                                   const Icon(
                                     Icons.star,
@@ -101,7 +345,7 @@ class _DetailScreenState extends State<DetailScreen>
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    widget.content['imdb_rating'].toString(),
+                                    _contentItem.imdbRating.toString(),
                                     style: const TextStyle(
                                       color: AppTheme.textColorSecondary,
                                       fontSize: 14,
@@ -132,87 +376,330 @@ class _DetailScreenState extends State<DetailScreen>
 
                 // Action buttons
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   child: Row(
                     children: [
                       Expanded(
+                        flex: 2,
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            // Removed API call and navigation to VideoPlayerScreen
-                            print(
-                                'Watch button tapped! (No actual playback in UI-only mode)');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Video playback not available in UI-only mode.'),
-                                backgroundColor: AppTheme.primaryColor,
-                              ),
-                            );
+                          onPressed: () async {
+                            // Ensure content item ID is valid before attempting to play
+                            print('Play button pressed - Current content item: ${_contentItem.toJson()}');
+                            
+                            if (_contentItem.id == null || _contentItem.id!.isEmpty) {
+                              print('Invalid content ID detected in play button handler');
+                              print('Current content: ${_contentItem.toJson()}');
+                              print('Original content data: ${widget.content}');
+                              
+                              // Try to recover by re-converting content item
+                              _convertToContentItem();
+                              
+                              if (_contentItem.id == null || _contentItem.id!.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Cannot play: Missing content ID. Title: ${_contentItem.title}'),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 4),
+                                  ),
+                                );
+                                return;
+                              }
+                            }
+
+                            if (_isDownloaded) {
+                              print('Content is downloaded, getting local path');
+                              final offlinePath = await widget.localStorageService
+                                  .getDownloadedContentPath(_contentItem.id!);
+                                  
+                              if (offlinePath != null) {
+                                print('Playing from offline path: $offlinePath');
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => VideoPlayerScreen(
+                                      content: _contentItem,
+                                      apiService: widget.apiService,
+                                      localStorageService: widget.localStorageService,
+                                      isOffline: true,
+                                      offlinePath: offlinePath,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                // If path retrieval failed, play online
+                                print('Offline path not found, falling back to online playback');
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => VideoPlayerScreen(
+                                      content: _contentItem,
+                                      apiService: widget.apiService,
+                                      localStorageService: widget.localStorageService,
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else {
+                              print('Content not downloaded, playing online');
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => VideoPlayerScreen(
+                                    content: _contentItem,
+                                    apiService: widget.apiService,
+                                    localStorageService: widget.localStorageService,
+                                  ),
+                                ),
+                              );
+                            }
                           },
-                          icon: const Icon(Icons.play_arrow),
-                          label: const Text('Watch'),
+                          icon: const Icon(Icons.play_arrow, color: Colors.white),
+                          label: const Text(
+                            'Play',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                           style: ElevatedButton.styleFrom(
-                            foregroundColor: AppTheme.buttonTextColor,
                             backgroundColor: AppTheme.primaryColor,
                             padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            // TODO: Implement Watch List functionality
-                            print('Add to Watch List button tapped!');
+                      const SizedBox(width: 8),
+                      // Trailer button
+                      _buildIconButton(
+                        icon: Icons.movie_outlined,
+                        label: 'Trailer',
+                        onTap: () {
+                          // Debug prints to understand the data structure
+                          print('Attempting to play trailer');
+                          print('Content data structure: ${widget.content}');
+                          
+                          // First try to get the trailer URL from various possible field names
+                          final trailerUrl = widget.content['trailer_url'] ?? 
+                                            widget.content['trailerUrl'] ?? 
+                                            widget.content['trailer'];
+                          
+                          print('Found trailer URL: $trailerUrl');
+                          
+                          if (trailerUrl == null || trailerUrl.toString().isEmpty) {
+                            // If no trailer URL is available, use a placeholder or fallback URL for testing
+                            final fallbackUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+                            print('No trailer URL found, using fallback: $fallbackUrl');
+                            
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                    'Add to Watch List not implemented in UI-only mode.'),
-                                backgroundColor: AppTheme.primaryColor,
+                                content: Text('No official trailer available - playing sample video'),
+                                backgroundColor: Colors.orange,
                               ),
                             );
-                          },
-                          icon: const Icon(Icons.bookmark_add_outlined),
-                          label: const Text('Watch List'),
-                          style: ElevatedButton.styleFrom(
-                            foregroundColor: AppTheme.buttonTextColor,
-                            backgroundColor: AppTheme.primaryColor,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
+                            
+                            // Create a temporary ContentItem for the sample trailer
+                            final trailerContent = ContentItem(
+                              id: _contentItem.id ?? 'sample_trailer',
+                              title: "${_contentItem.title} - Sample Trailer",
+                              description: _contentItem.description,
+                              posterUrl: _contentItem.posterUrl,
+                              type: "trailer",
+                              quality: _contentItem.quality,
+                              trailerUrl: fallbackUrl,
+                              collectionId: _contentItem.collectionId ?? 'all',
+                            );
+                            
+                            print('Created trailer content: ${trailerContent.toJson()}');
+                            
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => VideoPlayerScreen(
+                                  content: trailerContent,
+                                  apiService: widget.apiService,
+                                  localStorageService: widget.localStorageService,
+                                  isTrailer: true,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          // Create a temporary ContentItem for the real trailer
+                          final trailerContent = ContentItem(
+                            id: _contentItem.id ?? 'unknown_id',
+                            title: "${_contentItem.title} - Trailer",
+                            description: _contentItem.description,
+                            posterUrl: _contentItem.posterUrl,
+                            type: "trailer",
+                            quality: _contentItem.quality,
+                            trailerUrl: trailerUrl.toString(),
+                            collectionId: _contentItem.collectionId ?? 'all',
+                          );
+                          
+                          print('Created trailer content: ${trailerContent.toJson()}');
+                          
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => VideoPlayerScreen(
+                                content: trailerContent,
+                                apiService: widget.apiService,
+                                localStorageService: widget.localStorageService,
+                                isTrailer: true,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // Download button
+                      _buildIconButton(
+                        icon: _isDownloaded 
+                            ? Icons.delete 
+                            : (_isDownloading ? Icons.downloading : Icons.download),
+                        label: _isDownloaded 
+                            ? 'Delete' 
+                            : (_isDownloading ? 'Downloading...' : 'Download'),
+                        onTap: () async {
+                          print('Download button pressed for content: ${_contentItem.toJson()}');
+                          
+                          // Check if content is already downloaded - if yes, delete it
+                          if (_isDownloaded) {
+                            try {
+                              print('Deleting downloaded content with ID: ${_contentItem.id}');
+                              await widget.localStorageService.deleteDownloadedContent(_contentItem.id!);
+                              setState(() {
+                                _isDownloaded = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Content deleted from downloads'),
+                                  backgroundColor: Colors.blue,
+                                ),
+                              );
+                              return;
+                            } catch (e) {
+                              print('Error deleting content: $e');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error deleting content: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                          }
+                          
+                          // Validate content ID
+                          if (_contentItem.id == null || _contentItem.id!.isEmpty) {
+                            print('Cannot download: Invalid content ID');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Cannot download: Invalid content ID'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          // Start download
+                          try {
+                            print('Starting download for content: ${_contentItem.toJson()}');
+                            setState(() {
+                              _isDownloading = true;
+                            });
+                            
+                            final contentUrl = widget.content['contentUrl'] ?? 
+                                              widget.content['content_url'] ?? 
+                                              widget.content['url'];
+                            
+                            if (contentUrl == null || contentUrl.toString().isEmpty) {
+                              throw Exception('Content URL not found');
+                            }
+                            
+                            print('Downloading from URL: $contentUrl');
+                            
+                            final localPath = await widget.localStorageService.downloadContent(
+                              _contentItem,
+                              contentUrl.toString(),
+                            );
+                            
+                            print('Download completed. Local path: $localPath');
+                            
+                            setState(() {
+                              _isDownloading = false;
+                              _isDownloaded = true;
+                            });
+                            
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${_contentItem.title} downloaded successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } catch (e) {
+                            print('Download error: $e');
+                            setState(() {
+                              _isDownloading = false;
+                            });
+                            
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Download failed: ${e.toString()}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // Add to watchlist button
+                      _buildIconButton(
+                        icon: _isInList ? Icons.check : Icons.add,
+                        label: _isInList ? 'In List' : 'My List',
+                        onTap: () {
+                          setState(() {
+                            _isInList = !_isInList;
+                          });
+                          // Save to local storage in a real implementation
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _isInList ? 'Added to My List' : 'Removed from My List',
+                              ),
+                              backgroundColor: AppTheme.primaryColor,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // Share button
+                      _buildIconButton(
+                        icon: Icons.share,
+                        label: 'Share',
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Share feature not implemented'),
+                              backgroundColor: AppTheme.primaryColor,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
 
-                // Additional action buttons
+                // Report button
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      _buildIconButton(
-                        icon: _isInList
-                            ? Icons.playlist_add_check
-                            : Icons.playlist_add,
-                        label: 'Add List',
-                        onTap: () {
-                          setState(() {
-                            _isInList = !_isInList;
-                          });
-                        },
-                      ),
-                      _buildIconButton(
-                        icon: Icons.videocam,
-                        label: 'Trailer',
-                        onTap: () {},
-                      ),
-                      _buildIconButton(
-                        icon: Icons.share,
-                        label: 'Share',
-                        onTap: () {},
-                      ),
                       _buildIconButton(
                         icon: Icons.flag,
                         label: 'Report',
@@ -224,14 +711,28 @@ class _DetailScreenState extends State<DetailScreen>
                   ),
                 ),
 
-                // Tabs
-                TabBar(
-                  controller: _tabController,
-                  tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
-                  indicatorColor: AppTheme.primaryColor,
-                  labelColor: AppTheme.primaryColor,
-                  unselectedLabelColor: AppTheme.textColorSecondary,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                // Tab bar
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundColor,
+                    border: Border(bottom: BorderSide(color: AppTheme.surfaceColor, width: 1)),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicatorColor: AppTheme.primaryColor,
+                    indicatorWeight: 3,
+                    labelColor: AppTheme.primaryColor,
+                    unselectedLabelColor: AppTheme.textColorSecondary,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+                    tabs: _tabs
+                        .map((label) => Tab(
+                              text: label,
+                              height: 44,
+                            ))
+                        .toList(),
+                  ),
                 ),
 
                 // Tab content
@@ -261,9 +762,9 @@ class _DetailScreenState extends State<DetailScreen>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image
+        // Background image using processed content item
         Image.network(
-          widget.content['poster_url'] ?? 'https://via.placeholder.com/500x300',
+          _contentItem.posterUrl ?? 'https://via.placeholder.com/800x450',
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) => Container(
             color: AppTheme.surfaceColor,
@@ -282,17 +783,40 @@ class _DetailScreenState extends State<DetailScreen>
               end: Alignment.bottomCenter,
               colors: [
                 Colors.transparent,
+                Colors.black.withOpacity(0.5),
                 Colors.black.withOpacity(0.7),
                 Colors.black,
               ],
+              stops: const [0.1, 0.5, 0.8, 1.0],
             ),
           ),
         ),
         // Quality badge
-        if (widget.content['quality'] != null)
+        if (_contentItem.quality != null)
           Positioned(
             top: 85, // Below the app bar
             left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _contentItem.quality!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        // Duration info if available
+        if (_contentItem.duration != null)
+          Positioned(
+            top: 85, // Below the app bar
+            left: _contentItem.quality != null ? 80 : 16,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -300,11 +824,10 @@ class _DetailScreenState extends State<DetailScreen>
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                widget.content['quality'],
+                '${_contentItem.duration} min',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -351,11 +874,10 @@ class _DetailScreenState extends State<DetailScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Genre
-          if (widget.content['genres'] != null &&
-              (widget.content['genres'] as List).isNotEmpty)
+          if (_contentItem.genres != null && _contentItem.genres!.isNotEmpty)
             Wrap(
               spacing: 8,
-              children: (widget.content['genres'] as List).map((genre) {
+              children: _contentItem.genres!.map((genre) {
                 return Chip(
                   label: Text(
                     genre,
@@ -384,7 +906,7 @@ class _DetailScreenState extends State<DetailScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            widget.content['description'] ?? 'No description available.',
+            _contentItem.description ?? 'No description available.',
             style: const TextStyle(
               color: AppTheme.textColorSecondary,
               fontSize: 14,
@@ -393,15 +915,21 @@ class _DetailScreenState extends State<DetailScreen>
           ),
 
           // Additional information
-          if (widget.content['duration'] != null) ...[
+          if (_contentItem.duration != null) ...[
             const SizedBox(height: 16),
-            _buildInfoRow('Duration', '${widget.content['duration']} min'),
+            _buildInfoRow('Duration', '${_contentItem.duration} min'),
           ],
-          if (widget.content['countries'] != null &&
-              (widget.content['countries'] as List).isNotEmpty) ...[
+          if (_contentItem.releaseYear != null) ...[
             const SizedBox(height: 8),
-            _buildInfoRow(
-                'Country', (widget.content['countries'] as List).join(', ')),
+            _buildInfoRow('Release Year', '${_contentItem.releaseYear}'),
+          ],
+          if (_contentItem.imdbRating != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow('Rating', '${_contentItem.imdbRating}/10'),
+          ],
+          if (_contentItem.countries != null && _contentItem.countries!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow('Country', _contentItem.countries!.join(', ')),
           ],
         ],
       ),
@@ -598,7 +1126,11 @@ class _DetailScreenState extends State<DetailScreen>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DetailScreen(content: item),
+                builder: (context) => DetailScreen(
+                  content: item,
+                  apiService: widget.apiService,
+                  localStorageService: widget.localStorageService,
+                ),
               ),
             );
           },

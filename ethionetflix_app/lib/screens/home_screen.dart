@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/content_card.dart';
-import '../widgets/logo.dart';
 import '../screens/detail_screen.dart';
-import '../screens/profile_screen.dart';
-import '../screens/search_screen.dart';
-import '../screens/filter_screen.dart';
 import '../screens/popular_content_screen.dart';
 import 'package:ethionetflix_app/services/api_service.dart';
+import 'package:ethionetflix_app/services/local_storage_service.dart';
 import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final ApiService apiService;
+  final LocalStorageService localStorageService;
+  
+  const HomeScreen({
+    required this.apiService,
+    required this.localStorageService,
+    super.key,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -19,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
   List<dynamic> _trendingContent = [];
   List<dynamic> _popularContent = [];
   List<dynamic> _latestContent = [];
@@ -32,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _apiService = widget.apiService;
     _loadAllContent();
   }
 
@@ -49,367 +54,294 @@ class _HomeScreenState extends State<HomeScreen>
       _errorMessage = null;
     });
 
+    print('Loading all content from WebSocket...');
+
+    // Store received items in lists
+    List<dynamic> receivedItems = [];
+
     _trendingSubscription = _apiService
         .connectToContentWebSocket(
       type: 'collection',
-      collectionId: 'trending',
+      collectionId: 'all', // Using 'all' to get all content
     )
         .listen(
       (data) {
-        setState(() {
-          if (data is List) {
-            _trendingContent = data;
-          } else if (data is Map &&
-              data.containsKey('results') &&
-              data['results'] is List) {
-            _trendingContent = data['results'];
-          } else if (data is Map) {
-            _trendingContent = [data];
-          } else {
-            _trendingContent = [];
-            _errorMessage = 'Unexpected data format for trending content.';
+        print('Received data: ${data.runtimeType}');
+        
+        if (data is List) {
+          // If data is a list, add all items
+          print('Received list data with ${data.length} items');
+          setState(() {
+            for (var item in data) {
+              if (!receivedItems.any((existing) => 
+                 (existing['movieId'] != null && item['movieId'] != null && existing['movieId'] == item['movieId']) ||
+                 (existing['id'] != null && item['id'] != null && existing['id'] == item['id']))) {
+                receivedItems.add(item);
+              }
+            }
+            _trendingContent = List.from(receivedItems);
+            _popularContent = List.from(receivedItems);
+            _latestContent = List.from(receivedItems);
+            _isLoading = false;
+          });
+          print('Updated content lists: ${receivedItems.length} total items');
+        } else if (data is Map) {
+          // If data is a single item (Map), add it if not already present
+          if (!receivedItems.any((existing) => 
+             (existing['movieId'] != null && data['movieId'] != null && existing['movieId'] == data['movieId']) ||
+             (existing['id'] != null && data['id'] != null && existing['id'] == data['id']))) {
+            receivedItems.add(data);
+            
+            // Update all content lists with all received items
+            setState(() {
+              _trendingContent = List.from(receivedItems);
+              _popularContent = List.from(receivedItems);
+              _latestContent = List.from(receivedItems);
+              _isLoading = false;
+            });
+            print('Added item to all content lists: ${receivedItems.length} total items');
+            print('Content item details: ${data['name'] ?? data['title'] ?? 'Unknown'}, Thumbnail: ${data['thumbNail']}');
           }
-        });
+        }
       },
       onError: (error) {
         setState(() {
-          _errorMessage = 'Failed to load trending content: $error';
-          _trendingContent = [];
+          _errorMessage = 'Failed to load content: $error';
+          _isLoading = false;
         });
-        print('Trending content WebSocket error: $error');
+        print('WebSocket error: $error');
       },
       onDone: () {
-        print('Trending content WebSocket disconnected.');
-      },
-    );
-
-    _popularSubscription = _apiService
-        .connectToContentWebSocket(
-      type: 'collection',
-      collectionId: 'popular',
-    )
-        .listen(
-      (data) {
-        setState(() {
-          if (data is List) {
-            _popularContent = data;
-          } else if (data is Map &&
-              data.containsKey('results') &&
-              data['results'] is List) {
-            _popularContent = data['results'];
-          } else if (data is Map) {
-            _popularContent = [data];
-          } else {
-            _popularContent = [];
-            _errorMessage = 'Unexpected data format for popular content.';
-          }
-        });
-      },
-      onError: (error) {
-        setState(() {
-          _errorMessage = 'Failed to load popular content: $error';
-          _popularContent = [];
-        });
-        print('Popular content WebSocket error: $error');
-      },
-      onDone: () {
-        print('Popular content WebSocket disconnected.');
-      },
-    );
-
-    _latestSubscription = _apiService
-        .connectToContentWebSocket(
-      type: 'collection',
-      collectionId: 'latest',
-    )
-        .listen(
-      (data) {
-        setState(() {
-          _isLoading =
-              false; // Set to false after all subscriptions are initialized
-          if (data is List) {
-            _latestContent = data;
-          } else if (data is Map &&
-              data.containsKey('results') &&
-              data['results'] is List) {
-            _latestContent = data['results'];
-          } else if (data is Map) {
-            _latestContent = [data];
-          } else {
-            _latestContent = [];
-            _errorMessage = 'Unexpected data format for latest content.';
-          }
-        });
-      },
-      onError: (error) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Failed to load latest content: $error';
-          _latestContent = [];
         });
-        print('Latest content WebSocket error: $error');
-      },
-      onDone: () {
-        print('Latest content WebSocket disconnected.');
+        print('WebSocket disconnected.');
       },
     );
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
+        backgroundColor: AppTheme.backgroundColor,
+        elevation: 0,
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const AppLogo(width: 120, height: 36),
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FilterScreen(),
-                      ),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SearchScreen(),
-                      ),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.person_outline),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfileScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
+            Text(
+              'Royal',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+              ),
+            ),
+            Text(
+              'Films',
+              style: TextStyle(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+              ),
             ),
           ],
         ),
-        automaticallyImplyLeading: false,
-        backgroundColor: AppTheme.backgroundColor,
-        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.search, color: Colors.white),
+            onPressed: () {
+              // Navigate to search screen
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.person, color: Colors.white),
+            onPressed: () {
+              // Navigate to profile screen
+            },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Featured Content (use first trending item as featured)
-            if (_isLoading)
-              const Center(
-                  child: CircularProgressIndicator(
-                      color: AppTheme.primaryColor)) // Loading indicator
-            else if (_errorMessage != null)
-              Center(
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: AppTheme.errorColor),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red, size: 60),
+                      SizedBox(height: 16),
+                      Text(
+                        'Error Loading Content',
+                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadAllContent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                        ),
+                        child: Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    _loadAllContent();
+                  },
+                  color: AppTheme.primaryColor,
+                  child: ListView(
+                    children: [
+                      // Featured content at the top (first item from trending if available)
+                      _trendingContent.isNotEmpty
+                          ? _buildFeaturedContent(_trendingContent[0])
+                          : SizedBox.shrink(),
+
+                      // Content sections
+                      _buildContentSection('Trending', _trendingContent),
+                      _buildContentSection('Popular', _popularContent),
+                      _buildContentSection('Latest', _latestContent),
+
+                      SizedBox(height: 80), // Bottom padding
+                    ],
+                  ),
                 ),
-              )
-            else ...[
-              if (_trendingContent.isNotEmpty)
-                _buildFeaturedContent(_trendingContent[0]),
 
-              // Trending Content Section
-              _buildContentSection('Trending', _trendingContent),
-
-              // Popular Content Section
-              _buildContentSection('Popular', _popularContent),
-
-              // Latest Content Section (using the dummy data)
-              _buildContentSection('Latest', _latestContent),
-            ],
-          ],
-        ),
-      ),
     );
   }
 
   Widget _buildFeaturedContent(dynamic featuredItem) {
-    return Container(
-      height: 240,
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: Stack(
-        children: [
-          // Featured image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              featuredItem['poster_url'] ??
-                  'https://via.placeholder.com/500x300',
-              width: double.infinity,
-              height: 240,
+    return Stack(
+      children: [
+        // Background image
+        Container(
+          height: 450,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: NetworkImage(
+                featuredItem['thumbNail'] != null && featuredItem['thumbNail'].toString().isNotEmpty
+                    ? featuredItem['thumbNail'].toString().startsWith('http')
+                        ? featuredItem['thumbNail'].toString()
+                        : featuredItem['thumbNail'].toString().startsWith('/thumbnails')
+                            ? 'https://ethionetflix.hopto.org${featuredItem['thumbNail']}'
+                            : featuredItem['thumbNail'].toString()
+                    : featuredItem['poster_url'] != null && featuredItem['poster_url'].toString().isNotEmpty
+                        ? featuredItem['poster_url'].toString()
+                        : 'https://via.placeholder.com/800x450',
+              ),
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: double.infinity,
-                height: 240,
-                color: AppTheme.cardColor,
-                child: const Icon(
-                  Icons.broken_image,
-                  color: AppTheme.textColorSecondary,
-                  size: 50,
+            ),
+          ),
+        ),
+        
+        // Gradient overlay
+        Container(
+          height: 450,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withOpacity(0.7),
+                Colors.black.withOpacity(0.9),
+              ],
+              stops: const [0.4, 0.75, 1.0],
+            ),
+          ),
+        ),
+        
+        // Content details
+        Positioned(
+          bottom: 40,
+          left: 20,
+          right: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                featuredItem['name'] ?? featuredItem['seriesName'] ?? featuredItem['title'] ?? 'Featured Content',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ),
-
-          // Gradient overlay
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                stops: const [0.5, 1.0],
-              ),
-            ),
-          ),
-
-          // Content details
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  Text(
-                    featuredItem['title'] ?? 'Featured Title',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  if (featuredItem['quality'] != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        featuredItem['quality'],
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (featuredItem['quality'] != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            featuredItem['quality']!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      if (featuredItem['imdb_rating'] != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star,
-                                  color: Colors.amber, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                featuredItem['imdb_rating']!.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      if (featuredItem['release_year'] != null)
-                        Text(
-                          featuredItem['release_year'].toString(),
-                          style: const TextStyle(
-                            color: AppTheme.textColorSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      if (featuredItem['duration'] != null)
-                        Text(
-                          '${featuredItem['duration']} min',
-                          style: const TextStyle(
-                            color: AppTheme.textColorSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    featuredItem['description'] ?? 'No description available.',
-                    style: const TextStyle(
-                      color: AppTheme.textColorSecondary,
-                      fontSize: 14,
+                  const SizedBox(width: 10),
+                  if (featuredItem['year'] != null)
+                    Text(
+                      featuredItem['year'].toString(),
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 16),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              DetailScreen(content: featuredItem),
+                          builder: (context) => DetailScreen(
+                            content: featuredItem,
+                            apiService: _apiService,
+                            localStorageService: LocalStorageService(),
+                          ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.play_arrow, color: Colors.white),
-                    label: const Text(
-                      'Watch Now',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    label: const Text('Watch Now'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      // Add to watchlist functionality
+                    },
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text('My List'),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white, width: 1),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -421,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -435,12 +367,15 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               TextButton(
                 onPressed: () {
-                  // Navigate to a screen showing all content for this category
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => PopularContentScreen(
-                          title: title, contentList: contentList),
+                        title: title,
+                        contentList: contentList,
+                        apiService: _apiService,
+                        localStorageService: LocalStorageService(),
+                      ),
                     ),
                   );
                 },
@@ -466,15 +401,29 @@ class _HomeScreenState extends State<HomeScreen>
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: ContentCard(
-                  imageUrl: content['poster_url'] ??
-                      'https://via.placeholder.com/300x450',
-                  title: content['title'] ?? 'No Title',
+                  imageUrl: content['thumbNail'] != null && content['thumbNail'].toString().isNotEmpty
+                      ? content['thumbNail'].toString().startsWith('http')
+                          ? content['thumbNail'].toString()
+                          : content['thumbNail'].toString().startsWith('/thumbnails')
+                              ? 'https://ethionetflix.hopto.org${content['thumbNail']}'
+                              : content['thumbNail'].toString()
+                      : content['poster_url'] != null && content['poster_url'].toString().isNotEmpty
+                          ? content['poster_url'].toString()
+                          : 'https://via.placeholder.com/300x450',
+                  title: content['name'] ?? content['seriesName'] ?? content['title'] ?? 'No Title',
+                  type: content['type'],
+                  year: content['year'],
                   quality: content['quality'] ?? 'HD',
+                  episodeInfo: content['episode'] != null ? 'E${content['episode']}' : null,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => DetailScreen(content: content),
+                        builder: (context) => DetailScreen(
+                          content: content,
+                          apiService: _apiService,
+                          localStorageService: LocalStorageService(),
+                        ),
                       ),
                     );
                   },

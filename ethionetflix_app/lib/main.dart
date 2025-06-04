@@ -1,18 +1,15 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-// import 'services/api_service.dart'; // Removed
+import 'services/api_service.dart';
+import 'services/local_storage_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
-// import 'screens/login_screen.dart'; // Removed
-// import 'screens/tv_login_screen.dart'; // Removed
 import 'screens/movies_screen.dart';
 import 'screens/watch_list_screen.dart';
 import 'screens/tv_series_screen.dart';
 import 'config/app_theme.dart';
-// import 'screens/backend_test_screen.dart'; // Removed
-// import 'screens/websocket_test_screen.dart'; // Removed
 
 void main() {
   runApp(const MyApp());
@@ -40,25 +37,32 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  // final ApiService _apiService = ApiService(); // Removed
-
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const MoviesScreen(),
-    const TvSeriesScreen(),
-    const WatchListScreen(),
-    const SettingsScreen(),
-  ];
+  final ApiService _apiService = ApiService();
+  final LocalStorageService _localStorageService = LocalStorageService();
+  
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    // _apiService.connectToContentWebSocket(); // Removed
+    _initializeScreens();
+    // Initialize connection to WebSocket
+    _apiService.connectToContentWebSocket(type: 'featured');
+  }
+  
+  void _initializeScreens() {
+    _screens = [
+      HomeScreen(apiService: _apiService, localStorageService: _localStorageService),
+      MoviesScreen(localStorageService: _localStorageService),
+      TvSeriesScreen(apiService: _apiService, localStorageService: _localStorageService),
+      WatchListScreen(apiService: _apiService, localStorageService: _localStorageService),
+      SettingsScreen(apiService: _apiService, localStorageService: _localStorageService),
+    ];
   }
 
   @override
   void dispose() {
-    // _apiService.dispose(); // Removed
+    _apiService.dispose();
     super.dispose();
   }
 

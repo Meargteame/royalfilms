@@ -2,9 +2,18 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/logo.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
-  const SubscriptionScreen({Key? key}) : super(key: key);
+  final ApiService? apiService;
+  final LocalStorageService? localStorageService;
+  
+  const SubscriptionScreen({
+    Key? key,
+    this.apiService,
+    this.localStorageService,
+  }) : super(key: key);
 
   @override
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
@@ -342,7 +351,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget _buildPlanCard(int index) {
     final plan = _subscriptionPlans[index];
     final isSelected = _selectedPlanIndex == index;
-    final isPremium = plan['name'] == 'Premium';
+    // Use the premium status to potentially enhance UI (e.g., add special effects or badges)
+    final bool isPremium = index == 2;
+    if (isPremium) {
+      // Apply premium-specific styling in the card
+    }
     final isPopular = plan.containsKey('popular') && plan['popular'] == true;
     
     return GestureDetector(
