@@ -1,9 +1,12 @@
 // lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../config/app_theme.dart';
 import '../widgets/logo.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import 'payment_test_screen.dart';
+import 'subscription_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final ApiService? apiService;
@@ -51,20 +54,48 @@ class SettingsScreen extends StatelessWidget {
                 color: AppTheme.textColorSecondary,
               ),
             ),
-            TextButton(
+            
+            const SizedBox(height: 40),
+            
+            // Subscription Button
+            ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Checking for updates (dummy)...'),
-                    backgroundColor: AppTheme.primaryColor,
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SubscriptionScreen(
+                      apiService: apiService,
+                      localStorageService: localStorageService,
+                    ),
                   ),
                 );
               },
-              child: const Text(
-                'Check for Updates',
-                style: TextStyle(color: AppTheme.primaryColor, fontSize: 14),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
               ),
+              child: const Text('Manage Subscription'),
             ),
+            
+            // Only show Test Payment button in web mode
+            if (kIsWeb) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PaymentTestScreen(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orangeAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                child: const Text('Test Payment (Web Only)'),
+              ),
+            ],
           ],
         ),
       ),

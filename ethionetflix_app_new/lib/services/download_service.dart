@@ -133,7 +133,7 @@ class DownloadService {
     final androidDetails = AndroidNotificationDetails(
       'download_channel',
       'Downloads',
-      channelDescription: 'Download progress notifications',
+      channelDescription: 'Download progress notifications', // Changed back to named argument
       importance: Importance.low,
       priority: Priority.low,
       showProgress: progress != null,
@@ -191,4 +191,4 @@ class DownloadService {
       rethrow;
     }
   }
-} 
+}

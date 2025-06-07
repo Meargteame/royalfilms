@@ -4,8 +4,11 @@ import 'package:flutter/services.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/download_service.dart';
+import '../services/payment_service.dart';
 import '../models/content_item.dart';
 import 'video_player_screen.dart';
+import 'payment_screen.dart';
 
 class DetailScreen extends StatefulWidget {
   final Map<String, dynamic> content;
@@ -24,10 +27,14 @@ class DetailScreen extends StatefulWidget {
 }
 
 class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMixin {
+  final DownloadService _downloadService = DownloadService();
+  final PaymentService _paymentService = PaymentService();
   late ContentItem _contentItem;
   bool _isInList = false;
   bool _isDownloaded = false;
   bool _isDownloading = false;
+  bool _isPaid = false;
+  double _downloadProgress = 0;
   TabController? _tabController;
   final ScrollController _scrollController = ScrollController();
   final List<String> _tabs = ['Overview', 'Casts', 'Related'];
@@ -207,13 +214,148 @@ class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMix
 }
   
   Future<void> _checkIfDownloaded() async {
-    if (_contentItem.id != null) {
-      final isDownloaded = await widget.localStorageService
-          .isContentDownloaded(_contentItem.id!);
+    try {
+      final downloads = await _downloadService.getDownloadedContent();
+      setState(() {
+        _isDownloaded = downloads.any((download) => 
+          download['title'] == _contentItem.title ||
+          download['id'] == _contentItem.id
+        );
+      });
+    } catch (e) {
+      print('Error checking download status: $e');
+    }
+  }
+
+  Future<void> _toggleDownload() async {
+    if (_isDownloaded) {
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete Download'),
+          content: Text('Are you sure you want to delete "${_contentItem.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        try {
+          final downloads = await _downloadService.getDownloadedContent();
+          final download = downloads.firstWhere(
+            (d) => d['title'] == _contentItem.title || d['id'] == _contentItem.id,
+            orElse: () => {},
+          );
+          
+          if (download['localPath'] != null) {
+            await _downloadService.deleteDownload(download['localPath']);
+            setState(() {
+              _isDownloaded = false;
+            });
+            
       if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Download deleted')),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete download: $e')),
+            );
+          }
+        }
+      }
+    } else {
+      try {
         setState(() {
-          _isDownloaded = isDownloaded;
+          _isDownloading = true;
+          _downloadProgress = 0;
         });
+
+        // Print content data for debugging
+        print('Content data for download: ${widget.content}');
+
+        // Try to get the download URL from various possible fields
+        final downloadUrl = widget.content['downloadUrl'] ?? 
+                          widget.content['streamUrl'] ?? 
+                          widget.content['url'] ??
+                          widget.content['contentUrl'] ??
+                          widget.content['content_url'] ??
+                          widget.content['stream_url'] ??
+                          widget.content['download_url'];
+
+        print('Found download URL: $downloadUrl');
+
+        if (downloadUrl == null || downloadUrl.toString().isEmpty) {
+          // If no direct URL found, try to construct it from the content ID
+          final contentId = widget.content['id'] ?? 
+                          widget.content['movieId'] ?? 
+                          widget.content['_id'];
+          
+          if (contentId != null) {
+            // Construct the URL using the content ID
+            final constructedUrl = 'https://ethionetflix.hopto.org/api/stream/$contentId';
+            print('Constructed URL from ID: $constructedUrl');
+            
+            final downloadedContent = await _downloadService.downloadContent({
+              ...widget.content,
+              'downloadUrl': constructedUrl,
+            });
+
+            setState(() {
+              _isDownloading = false;
+              _isDownloaded = true;
+            });
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Download complete')),
+              );
+            }
+          } else {
+            throw Exception('No content ID available to construct download URL');
+          }
+        } else {
+          final downloadedContent = await _downloadService.downloadContent({
+            ...widget.content,
+            'downloadUrl': downloadUrl,
+          });
+
+          setState(() {
+            _isDownloading = false;
+            _isDownloaded = true;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Download complete')),
+            );
+          }
+        }
+      } catch (e) {
+        setState(() {
+          _isDownloading = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to download: $e')),
+          );
+        }
       }
     }
   }
@@ -406,57 +548,12 @@ class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMix
                               }
                             }
 
-                            if (_isDownloaded) {
-                              print('Content is downloaded, getting local path');
-                              final offlinePath = await widget.localStorageService
-                                  .getDownloadedContentPath(_contentItem.id!);
-                                  
-                              if (offlinePath != null) {
-                                print('Playing from offline path: $offlinePath');
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => VideoPlayerScreen(
-                                      content: _contentItem,
-                                      apiService: widget.apiService,
-                                      localStorageService: widget.localStorageService,
-                                      isOffline: true,
-                                      offlinePath: offlinePath,
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                // If path retrieval failed, play online
-                                print('Offline path not found, falling back to online playback');
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => VideoPlayerScreen(
-                                      content: _contentItem,
-                                      apiService: widget.apiService,
-                                      localStorageService: widget.localStorageService,
-                                    ),
-                                  ),
-                                );
-                              }
-                            } else {
-                              print('Content not downloaded, playing online');
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => VideoPlayerScreen(
-                                    content: _contentItem,
-                                    apiService: widget.apiService,
-                                    localStorageService: widget.localStorageService,
-                                  ),
-                                ),
-                              );
-                            }
+                            await _handlePlayButton();
                           },
                           icon: const Icon(Icons.play_arrow, color: Colors.white),
-                          label: const Text(
-                            'Play',
-                            style: TextStyle(
+                          label: Text(
+                            _isPaid || _isDownloaded ? 'Play' : 'Pay & Play (150 ETB)',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -564,97 +661,7 @@ class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMix
                         label: _isDownloaded 
                             ? 'Delete' 
                             : (_isDownloading ? 'Downloading...' : 'Download'),
-                        onTap: () async {
-                          print('Download button pressed for content: ${_contentItem.toJson()}');
-                          
-                          // Check if content is already downloaded - if yes, delete it
-                          if (_isDownloaded) {
-                            try {
-                              print('Deleting downloaded content with ID: ${_contentItem.id}');
-                              await widget.localStorageService.deleteDownloadedContent(_contentItem.id!);
-                              setState(() {
-                                _isDownloaded = false;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Content deleted from downloads'),
-                                  backgroundColor: Colors.blue,
-                                ),
-                              );
-                              return;
-                            } catch (e) {
-                              print('Error deleting content: $e');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error deleting content: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
-                          }
-                          
-                          // Validate content ID
-                          if (_contentItem.id == null || _contentItem.id!.isEmpty) {
-                            print('Cannot download: Invalid content ID');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Cannot download: Invalid content ID'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                            return;
-                          }
-                          
-                          // Start download
-                          try {
-                            print('Starting download for content: ${_contentItem.toJson()}');
-                            setState(() {
-                              _isDownloading = true;
-                            });
-                            
-                            final contentUrl = widget.content['contentUrl'] ?? 
-                                              widget.content['content_url'] ?? 
-                                              widget.content['url'];
-                            
-                            if (contentUrl == null || contentUrl.toString().isEmpty) {
-                              throw Exception('Content URL not found');
-                            }
-                            
-                            print('Downloading from URL: $contentUrl');
-                            
-                            final localPath = await widget.localStorageService.downloadContent(
-                              _contentItem,
-                              contentUrl.toString(),
-                            );
-                            
-                            print('Download completed. Local path: $localPath');
-                            
-                            setState(() {
-                              _isDownloading = false;
-                              _isDownloaded = true;
-                            });
-                            
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('${_contentItem.title} downloaded successfully'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          } catch (e) {
-                            print('Download error: $e');
-                            setState(() {
-                              _isDownloading = false;
-                            });
-                            
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Download failed: ${e.toString()}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        },
+                        onTap: _toggleDownload,
                       ),
                       const SizedBox(width: 8),
                       // Add to watchlist button
@@ -1239,6 +1246,76 @@ class _DetailScreenState extends State<DetailScreen> with TickerProviderStateMix
       activeColor: AppTheme.primaryColor,
       checkColor: AppTheme.buttonTextColor,
       controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
+
+  Future<void> _handlePlayButton() async {
+    if (_isPaid || _isDownloaded) {
+      _playContent();
+    } else {
+      // Show payment screen
+      final bool? paymentResult = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentScreen(
+            amount: 150.0, // Fixed amount for each movie
+            movieTitle: _contentItem.title ?? 'Unknown Title',
+            onPaymentComplete: (success) {
+              if (success) {
+                setState(() => _isPaid = true);
+              }
+              Navigator.pop(context, success);
+            },
+          ),
+        ),
+      );
+
+      if (paymentResult == true) {
+        _playContent();
+      }
+    }
+  }
+
+  void _playContent() {
+    if (_isDownloaded) {
+      print('Content is downloaded, getting local path');
+      widget.localStorageService
+          .getDownloadedContentPath(_contentItem.id!)
+          .then((offlinePath) {
+        if (offlinePath != null) {
+          print('Playing from offline path: $offlinePath');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoPlayerScreen(
+                content: _contentItem,
+                apiService: widget.apiService,
+                localStorageService: widget.localStorageService,
+                isOffline: true,
+                offlinePath: offlinePath,
+              ),
+            ),
+          );
+        } else {
+          _playOnlineContent();
+        }
+      });
+    } else {
+      _playOnlineContent();
+    }
+  }
+
+  void _playOnlineContent() {
+    print('Content not downloaded, playing online');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerScreen(
+          content: _contentItem,
+          apiService: widget.apiService,
+          localStorageService: widget.localStorageService,
+        ),
+      ),
     );
   }
 }

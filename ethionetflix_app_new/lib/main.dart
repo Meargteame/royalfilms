@@ -1,5 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/api_service.dart';
 import 'services/local_storage_service.dart';
 import 'screens/home_screen.dart';
@@ -9,9 +11,23 @@ import 'screens/settings_screen.dart';
 import 'screens/movies_screen.dart';
 import 'screens/downloads_screen.dart';
 import 'screens/tv_series_screen.dart';
+import 'screens/payment_test_screen.dart';
 import 'config/app_theme.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    // Load environment variables
+    await dotenv.load(fileName: ".env");
+    print("Environment variables loaded successfully");
+  } catch (e) {
+    // Handle .env loading errors gracefully
+    print("Warning: Could not load .env file: $e");
+    // Continue anyway as we have hardcoded defaults in ChapaConfig
+  }
+  
   runApp(const MyApp());
 }
 
@@ -41,13 +57,23 @@ class _MainScreenState extends State<MainScreen> {
   final LocalStorageService _localStorageService = LocalStorageService();
   
   late final List<Widget> _screens;
-
   @override
   void initState() {
     super.initState();
     _initializeScreens();
-    // Initialize connection to WebSocket
-    _apiService.connectToContentWebSocket(type: 'featured');
+    
+    // Initialize connection to WebSocket with error handling
+    try {
+      if (!kIsWeb) {
+        // Only try WebSocket connection in non-web environments
+        _apiService.connectToContentWebSocket(type: 'featured');
+      } else {
+        print('WebSocket connection skipped in web environment');
+      }
+    } catch (e) {
+      print('Failed to connect to WebSocket: $e');
+      // Continue without WebSocket connection
+    }
   }
   
   void _initializeScreens() {

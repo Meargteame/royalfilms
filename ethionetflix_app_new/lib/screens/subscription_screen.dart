@@ -4,6 +4,7 @@ import '../config/app_theme.dart';
 import '../widgets/logo.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import 'payment_screen.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   final ApiService? apiService;
@@ -79,15 +80,47 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       _processingPayment = true;
     });
     
-    // Simulate payment processing
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _processingPayment = false;
-        });
-        _showSuccessDialog();
-      }
-    });
+    final plan = _subscriptionPlans[_selectedPlanIndex];
+    final planName = plan['name'];
+    final price = _annualBilling ? plan['price'] * 12 * 0.8 : plan['price'].toDouble();
+    
+    if (_selectedPaymentMethod == 'chapa') {
+      // Use the actual Chapa payment gateway
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentScreen(
+            amount: price,
+            movieTitle: '$planName Subscription Plan',
+            onPaymentComplete: (success) {
+              if (success) {
+                _showSuccessDialog();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Payment was cancelled or failed'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          ),
+        ),
+      );
+      setState(() {
+        _processingPayment = false;
+      });
+    } else {
+      // Simulate payment processing for other methods
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _processingPayment = false;
+          });
+          _showSuccessDialog();
+        }
+      });
+    }
   }
 
   void _showSuccessDialog() {

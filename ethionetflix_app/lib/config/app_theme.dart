@@ -81,10 +81,12 @@ class AppTheme {
         bodyMedium: TextStyle(color: textColorSecondary, fontSize: 14),
         bodySmall: TextStyle(color: textColorTertiary, fontSize: 12),
       ),
-      tabBarTheme: const TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         labelColor: primaryColor,
         unselectedLabelColor: textColorSecondary,
-        indicatorColor: primaryColor,
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(color: primaryColor),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

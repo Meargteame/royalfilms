@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/chapa_service.dart';
+import '../services/chapa_proxy.dart';
 import '../config/chapa_config.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -26,6 +28,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isLoading = false;
   String? _paymentUrl;
   WebViewController? _webViewController;
+  bool _isWebEnvironment = kIsWeb;
   
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _firstNameController = TextEditingController();
@@ -88,6 +91,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final txRef = _generateTxRef();
     print('Generated transaction reference: $txRef');
     print('Initializing payment for amount: ${widget.amount} ETB');
+    print('Running in web environment: $_isWebEnvironment');
     
     // Clear any existing error messages
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -109,38 +113,120 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       if (response['status'] == 'success') {
         final checkoutUrl = response['data']['checkout_url'];
+        print('Received checkout URL: $checkoutUrl');
+        
         setState(() {
           _paymentUrl = checkoutUrl;
           _initializeWebView(checkoutUrl);
         });
       } else {
-        _showError('Payment initialization failed');
+        _showError('Payment initialization failed: ${response['message'] ?? "Unknown error"}');
         widget.onPaymentComplete(false);
       }
     } catch (e) {
-      _showError(e.toString());
+      print('Payment error caught: $e');
+      String errorMessage;
+      
+      if (_isWebEnvironment && e.toString().contains('Failed to fetch')) {
+        errorMessage = 'Unable to connect to payment gateway directly from web browser.\n\n'
+                      'This is typically due to CORS restrictions in web browsers.\n\n'
+                      'In a production app, this would be handled via a server-side proxy or by using Chapa\'s hosted checkout page.';
+      } else if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
+        errorMessage = 'Could not connect to the payment server. Please check your internet connection and try again.';
+      } else {
+        errorMessage = e.toString();
+      }
+      
+      _showError(errorMessage);
       widget.onPaymentComplete(false);
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  // Add a simulation method for web testing
+  void _simulatePaymentForWebTesting() {
+    // This is only for demo purposes in web preview
+    if (!_isWebEnvironment) return;
+    
+    setState(() => _isLoading = true);
+    
+    // Show loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Simulating payment process for web demo...'),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 2),
+      )
+    );
+    
+    // Simulate a delay and successful payment
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment simulation successful!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          )
+        );
+        
+        setState(() => _isLoading = false);
+        widget.onPaymentComplete(true);
+        
+        // Return to previous screen after short delay
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
+    });
+  }
+
   void _showError(String message) {
     print('Payment error: $message');
     if (!mounted) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: 'Retry',
-          textColor: Colors.white,
-          onPressed: _initializePayment,
+    // For web environment with CORS errors, show a dialog with more details
+    if (_isWebEnvironment && (message.contains('CORS') || message.contains('Failed to fetch'))) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Web Browser Limitation'),
+          content: const Text(
+            'Payment gateway cannot be accessed directly from the browser due to security restrictions.\n\n'
+            'In production, this would be handled with a proper backend.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _initializePayment();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
         ),
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _initializePayment,
+          ),
+        ),
+      );
+    }
   }
 
   void _showLoading(String message) {
@@ -265,6 +351,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       )
                     : const Text('Proceed to Payment'),
               ),
+              
+              // Add a web testing button
+              if (_isWebEnvironment)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _simulatePaymentForWebTesting,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                    ),
+                    child: const Text('Simulate Successful Payment (Web Demo)'),
+                  ),
+                ),
             ],
           ),
         ),
@@ -279,4 +378,4 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _lastNameController.dispose();
     super.dispose();
   }
-} 
+}

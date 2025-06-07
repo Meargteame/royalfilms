@@ -7,7 +7,7 @@ import 'screens/search_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/movies_screen.dart';
-import 'screens/watch_list_screen.dart';
+import 'screens/downloads_screen.dart';
 import 'screens/tv_series_screen.dart';
 import 'config/app_theme.dart';
 
@@ -53,9 +53,9 @@ class _MainScreenState extends State<MainScreen> {
   void _initializeScreens() {
     _screens = [
       HomeScreen(apiService: _apiService, localStorageService: _localStorageService),
-      MoviesScreen(localStorageService: _localStorageService),
+      MoviesScreen(apiService: _apiService, localStorageService: _localStorageService),
       TvSeriesScreen(apiService: _apiService, localStorageService: _localStorageService),
-      WatchListScreen(apiService: _apiService, localStorageService: _localStorageService),
+      DownloadsScreen(apiService: _apiService, localStorageService: _localStorageService),
       SettingsScreen(apiService: _apiService, localStorageService: _localStorageService),
     ];
   }
@@ -85,8 +85,8 @@ class _MainScreenState extends State<MainScreen> {
             label: 'TV Series',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bookmark_border_outlined),
-            label: 'Watch List',
+            icon: Icon(Icons.download_outlined),
+            label: 'Downloads',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.menu),

@@ -1,6 +1,8 @@
 // lib/services/local_storage_service.dart
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/content_item.dart';
@@ -114,18 +116,31 @@ class LocalStorageService {
   
   // Get a file reference for a specific content
   Future<File> _getFileForContent(String contentId) async {
+    if (kIsWeb) {
+      throw UnsupportedError('File operations are not supported on web');
+    }
+    
     final directory = await _getDownloadsDirectory();
     return File('${directory.path}/$contentId.mp4');
   }
   
   // Get the downloads directory
   Future<Directory> _getDownloadsDirectory() async {
+    if (kIsWeb) {
+      throw UnsupportedError('Directory operations are not supported on web');
+    }
+    
     final appDocDir = await getApplicationDocumentsDirectory();
     return Directory('${appDocDir.path}/$_downloadsFolderName');
   }
   
   // Request storage permission
   Future<bool> _requestStoragePermission() async {
+    if (kIsWeb) {
+      print('Storage permissions not applicable in web environment');
+      return false;
+    }
+    
     final status = await Permission.storage.status;
     if (status.isGranted) {
       return true;
