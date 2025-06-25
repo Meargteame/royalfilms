@@ -4,7 +4,7 @@ import '../models/payment_response.dart';
 import '../config/chapa_config.dart';
 
 class PaymentService {
-  static const String _baseUrl = 'https://ethionetflix.hopto.org';
+  static const String _baseUrl = 'https://ethionetflix1.hopto.org';
 
   // Initialize payment with Chapa
   Future<PaymentResponse> initializePayment(double amount) async {

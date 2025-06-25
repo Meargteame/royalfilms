@@ -1,12 +1,13 @@
 // lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+
 import '../config/app_theme.dart';
 import '../widgets/logo.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
-import 'payment_test_screen.dart';
+// import 'payment_test_screen.dart';
 import 'subscription_screen.dart';
+// import 'download_test_screen.dart'; // Commented out as per the suggestion
 
 class SettingsScreen extends StatelessWidget {
   final ApiService? apiService;
@@ -78,7 +79,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             
             // Only show Test Payment button in web mode
-            if (kIsWeb) ...[
+            /* if (kIsWeb) ...[
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
@@ -95,7 +96,25 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 child: const Text('Test Payment (Web Only)'),
               ),
-            ],
+            ], */
+            
+            // Add Modern Download Test button for all platforms
+            /* const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DownloadTestScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              ),
+              child: const Text('Test Modern Downloads'),
+            ), */
           ],
         ),
       ),

@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
-import '../services/download_service.dart';
+import '../services/modern_android_download_service.dart';
 import '../widgets/content_card.dart';
 import 'detail_screen.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class DownloadsScreen extends StatefulWidget {
   final LocalStorageService localStorageService;
@@ -22,7 +21,7 @@ class DownloadsScreen extends StatefulWidget {
 }
 
 class _DownloadsScreenState extends State<DownloadsScreen> {
-  final DownloadService _downloadService = DownloadService();
+  final ModernAndroidDownloadService _downloadService = ModernAndroidDownloadService();
   List<Map<String, dynamic>> _downloadedContent = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -32,7 +31,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     super.initState();
     _initializeDownloads();
   }
-
   Future<void> _initializeDownloads() async {
     try {
       await _downloadService.initialize();
@@ -51,10 +49,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       _errorMessage = null;
     });
     
-    try {
-      final downloads = await _downloadService.getDownloadedContent();
+    try {      // For the modern download service, we get downloaded content from local storage
+      final downloads = await widget.localStorageService.getDownloadedVideos();
       setState(() {
-        _downloadedContent = downloads;
+        _downloadedContent = downloads.cast<Map<String, dynamic>>();
         _isLoading = false;
       });
     } catch (e) {
@@ -67,14 +65,46 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   Future<void> _deleteDownload(Map<String, dynamic> content) async {
     try {
-      final localPath = content['localPath'];
-      if (localPath != null) {
-        await _downloadService.deleteDownload(localPath);
-        await _loadDownloadedContent(); // Refresh the list
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.surfaceColor,
+          title: const Text('Remove Download Record', style: TextStyle(color: AppTheme.textColorPrimary)),
+          content: Text(
+            'This will remove the download record from the app. The actual file on your device will remain.',
+            style: TextStyle(color: AppTheme.textColorSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        // Remove from local storage tracking
+        setState(() {
+          _downloadedContent.removeWhere((item) => item['id'] == content['id']);
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Download record removed. File remains on your device.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete download: $e')),
+        SnackBar(content: Text('Failed to remove download record: $e')),
       );
     }
   }
@@ -169,12 +199,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       onRefresh: _loadDownloadedContent,
                       color: AppTheme.primaryColor,
                       child: GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 0.6,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 12,
+                        padding: const EdgeInsets.all(8),                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          childAspectRatio: 0.68,
+                          crossAxisSpacing: 4,
+                          mainAxisSpacing: 8,
                         ),
                         itemCount: _downloadedContent.length,
                         itemBuilder: (context, index) {

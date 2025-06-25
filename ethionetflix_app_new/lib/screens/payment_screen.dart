@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/chapa_service.dart';
-import '../services/chapa_proxy.dart';
+import '../services/payment_callback_handler.dart';
 import '../config/chapa_config.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -25,10 +25,12 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   final _formKey = GlobalKey<FormState>();
   final _chapaService = ChapaService();
+  final _callbackHandler = PaymentCallbackHandler();
   bool _isLoading = false;
   String? _paymentUrl;
   WebViewController? _webViewController;
   bool _isWebEnvironment = kIsWeb;
+  String? _currentTxRef;
   
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _firstNameController = TextEditingController();
@@ -54,25 +56,70 @@ class _PaymentScreenState extends State<PaymentScreen> {
       )
       ..loadRequest(Uri.parse(url));
   }
-
   NavigationDecision _handleNavigationRequest(NavigationRequest request) {
     print('WebView navigating to: ${request.url}');
     
     if (request.url.startsWith('https://ethionetflix.com/payment/success')) {
-      print('Payment successful, closing payment screen');
-      widget.onPaymentComplete(true);
-      Navigator.of(context).pop();
+      print('Payment successful, verifying transaction...');
+      _handlePaymentSuccess(request.url);
       return NavigationDecision.prevent;
     }
     if (request.url.startsWith('https://ethionetflix.com/payment/cancel') ||
         request.url.contains('cancel') ||
         request.url.contains('failed')) {
       print('Payment cancelled or failed');
-      widget.onPaymentComplete(false);
-      Navigator.of(context).pop();
+      _handlePaymentFailure(request.url);
       return NavigationDecision.prevent;
     }
     return NavigationDecision.navigate;
+  }
+
+  /// Handle payment success with proper verification
+  Future<void> _handlePaymentSuccess(String url) async {
+    try {
+      final urlParams = _callbackHandler.parseUrlCallback(url);
+      final txRef = urlParams['tx_ref'] ?? _currentTxRef;
+      
+      if (txRef != null) {
+        _showLoading('Verifying payment...');
+        final result = await _callbackHandler.handlePaymentSuccess(txRef: txRef);
+        
+        if (result['success'] && result['verified']) {
+          _showSuccess('Payment verified successfully!');
+          widget.onPaymentComplete(true);
+        } else {
+          _showWarning('Payment completed but verification pending. Please contact support.');
+          widget.onPaymentComplete(true); // Still consider successful for user experience
+        }
+      } else {
+        _showError('Missing transaction reference');
+        widget.onPaymentComplete(false);
+      }
+    } catch (e) {
+      print('Error handling payment success: $e');
+      _showError('Payment completed but verification failed');
+      widget.onPaymentComplete(true); // Still consider successful
+    }
+    
+    Future.delayed(Duration(seconds: 2), () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  /// Handle payment failure
+  void _handlePaymentFailure(String url) {
+    final urlParams = _callbackHandler.parseUrlCallback(url);
+    final txRef = urlParams['tx_ref'] ?? _currentTxRef;
+    
+    final result = _callbackHandler.handlePaymentFailure(
+      txRef: txRef ?? 'unknown',
+      status: urlParams['status'],
+      message: urlParams['message'],
+    );
+    
+    _showError(result['message'] ?? 'Payment failed');
+    widget.onPaymentComplete(false);
+    Navigator.of(context).pop();
   }
 
   String _generateTxRef() {
@@ -81,7 +128,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final result = List.generate(10, (index) => chars[random.nextInt(chars.length)]).join();
     return 'tx-$result';
   }
-
   Future<void> _initializePayment() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -89,6 +135,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _showLoading('Initializing payment...');
 
     final txRef = _generateTxRef();
+    _currentTxRef = txRef; // Store for callback handling
     print('Generated transaction reference: $txRef');
     print('Initializing payment for amount: ${widget.amount} ETB');
     print('Running in web environment: $_isWebEnvironment');
@@ -200,15 +247,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _initializePayment();
-              },
-              child: const Text('Retry'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
             ),
           ],
         ),
@@ -218,18 +258,36 @@ class _PaymentScreenState extends State<PaymentScreen> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: _initializePayment,
-          ),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
   }
 
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showWarning(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   void _showLoading(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -237,17 +295,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
             const SizedBox(width: 16),
             Text(message),
           ],
         ),
-        duration: const Duration(seconds: 30),
         backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 10),
       ),
     );
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../widgets/content_card.dart';
 import '../screens/detail_screen.dart';
-import '../screens/popular_content_screen.dart';
 import 'package:ethionetflix_app/services/api_service.dart';
 import 'package:ethionetflix_app/services/local_storage_service.dart';
 import 'dart:async';
@@ -12,7 +11,7 @@ class MoviesScreen extends StatefulWidget {
   final ApiService apiService;
 
   const MoviesScreen({
-    Key? key, 
+    Key? key,
     required this.localStorageService,
     required this.apiService,
   }) : super(key: key);
@@ -94,12 +93,10 @@ class _MoviesScreenState extends State<MoviesScreen>
       },
     );
   }
-
   void _updateMovieLists(List<dynamic> items) {
     // Filter for movies only
     final allMovies = items.where((item) {
       final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
-      final type = item['type']?.toString().toLowerCase() ?? '';
       final genre = (item['genre'] as List<dynamic>?)?.map((e) => e.toString().toLowerCase()).toList() ?? [];
       
       // If it has episode number or seriesName, it's a TV series
@@ -186,6 +183,8 @@ class _MoviesScreenState extends State<MoviesScreen>
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 24,
+            fontFamily: AppTheme.primaryFontFamily,
+            letterSpacing: 0.5,
           ),
         ),
         actions: [
@@ -243,28 +242,19 @@ class _MoviesScreenState extends State<MoviesScreen>
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
+                            children: [                              const Text(
                                 'Trending Movies',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
+                                  fontFamily: AppTheme.primaryFontFamily,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PopularContentScreen(
-                                        title: 'Trending Movies',
-                                        contentList: _trendingMovies,
-                                        apiService: _apiService,
-                                        localStorageService: widget.localStorageService,
-                                      ),
-                                    ),
-                                  );
+                                  // TODO: Implement See All navigation or remove this button if not needed
                                 },
                         child: Text(
                                   'See All',
@@ -278,19 +268,18 @@ class _MoviesScreenState extends State<MoviesScreen>
                         ),
                         GridView.builder(
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          physics: const NeverScrollableScrollPhysics(),                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                            childAspectRatio: 0.6,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 12,
+                          crossAxisCount: 4,
+                            childAspectRatio: 0.68,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 8,
                           ),
                           itemCount: _trendingMovies.length,
                           itemBuilder: (context, index) {
                             final movie = _trendingMovies[index];
                             return ContentCard(
-                              imageUrl: movie['thumbNail'] ?? '',
+                              imageUrl: _getPosterUrl(movie),
                               title: movie['title'] ?? movie['name'] ?? 'Untitled',
                               type: movie['type'] ?? 'Movie',
                               quality: movie['quality'] ?? 'HD',
@@ -319,28 +308,19 @@ class _MoviesScreenState extends State<MoviesScreen>
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
+                            children: [                              const Text(
                                 'Popular Movies',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
+                                  fontFamily: AppTheme.primaryFontFamily,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PopularContentScreen(
-                                        title: 'Popular Movies',
-                                        contentList: _popularMovies,
-                                        apiService: _apiService,
-                                        localStorageService: widget.localStorageService,
-                                      ),
-                                    ),
-                                  );
+                                  // TODO: Implement See All navigation or remove this button if not needed
                                 },
                                 child: Text(
                                   'See All',
@@ -354,19 +334,18 @@ class _MoviesScreenState extends State<MoviesScreen>
                         ),
                         GridView.builder(
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          physics: const NeverScrollableScrollPhysics(),                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.6,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 12,
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.68,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 8,
                           ),
                           itemCount: _popularMovies.length,
                         itemBuilder: (context, index) {
                             final movie = _popularMovies[index];
                           return ContentCard(
-                              imageUrl: movie['thumbNail'] ?? '',
+                              imageUrl: _getPosterUrl(movie),
                               title: movie['title'] ?? movie['name'] ?? 'Untitled',
                               type: movie['type'] ?? 'Movie',
                             quality: movie['quality'] ?? 'HD',
@@ -395,28 +374,19 @@ class _MoviesScreenState extends State<MoviesScreen>
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
+                            children: [                              const Text(
                                 'Latest Movies',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
+                                  fontFamily: AppTheme.primaryFontFamily,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.push(
-                                context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PopularContentScreen(
-                                        title: 'Latest Movies',
-                                        contentList: _latestMovies,
-                                        apiService: _apiService,
-                                        localStorageService: widget.localStorageService,
-                                      ),
-                                    ),
-                                  );
+                                  // TODO: Implement See All navigation or remove this button if not needed
                                 },
                                 child: Text(
                                   'See All',
@@ -430,19 +400,18 @@ class _MoviesScreenState extends State<MoviesScreen>
                         ),
                         GridView.builder(
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          physics: const NeverScrollableScrollPhysics(),                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.6,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 12,
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.68,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 8,
                           ),
                           itemCount: _latestMovies.length,
                           itemBuilder: (context, index) {
                             final movie = _latestMovies[index];
                             return ContentCard(
-                              imageUrl: movie['thumbNail'] ?? '',
+                              imageUrl: _getPosterUrl(movie),
                               title: movie['title'] ?? movie['name'] ?? 'Untitled',
                               type: movie['type'] ?? 'Movie',
                               quality: movie['quality'] ?? 'HD',
@@ -469,222 +438,17 @@ class _MoviesScreenState extends State<MoviesScreen>
     );
   }
 
-  Widget _buildFeaturedContent(dynamic featuredItem) {
-    return Stack(
-      children: [
-        // Background image
-        Container(
-          height: 450,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage(
-                featuredItem['thumbNail'] != null && featuredItem['thumbNail'].toString().isNotEmpty
-                    ? featuredItem['thumbNail'].toString().startsWith('http')
-                        ? featuredItem['thumbNail'].toString()
-                        : featuredItem['thumbNail'].toString().startsWith('/thumbnails')
-                            ? 'https://ethionetflix.hopto.org${featuredItem['thumbNail']}'
-                            : featuredItem['thumbNail'].toString()
-                    : featuredItem['poster_url'] != null && featuredItem['poster_url'].toString().isNotEmpty
-                        ? featuredItem['poster_url'].toString()
-                        : 'https://via.placeholder.com/800x450',
-              ),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        
-        // Gradient overlay
-        Container(
-          height: 450,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black.withOpacity(0.7),
-                Colors.black.withOpacity(0.9),
-              ],
-              stops: const [0.4, 0.75, 1.0],
-            ),
-          ),
-        ),
-        
-        // Content details
-        Positioned(
-          bottom: 40,
-          left: 20,
-          right: 20,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                featuredItem['name'] ?? featuredItem['title'] ?? 'Featured Movie',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (featuredItem['quality'] != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                        child: Text(
-                        featuredItem['quality'],
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ),
-                  const SizedBox(width: 10),
-                  if (featuredItem['year'] != null)
-                    Text(
-                      featuredItem['year'].toString(),
-                      style: const TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => DetailScreen(
-                            content: featuredItem,
-                            apiService: _apiService,
-                            localStorageService: widget.localStorageService,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.play_arrow, color: Colors.white),
-                    label: const Text('Watch Now'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      // Add to watchlist functionality
-                    },
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    label: const Text('My List'),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white, width: 1),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContentSection(String title, List<dynamic> contentList) {
-    if (contentList.isEmpty) {
-      return Container(); // Don't show section if no content
+  String _getPosterUrl(Map<String, dynamic> movie) {
+    final thumb = movie['thumbNail']?.toString() ?? '';
+    final poster = movie['poster_url']?.toString() ?? '';
+    if (thumb.isNotEmpty && (thumb.startsWith('http') || thumb.startsWith('/thumbnails'))) {
+      return thumb.startsWith('http')
+          ? thumb
+          : 'https://ethionetflix1.hopto.org$thumb';
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.textColorPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => PopularContentScreen(
-                        title: title,
-                        contentList: contentList,
-                        apiService: _apiService,
-                        localStorageService: widget.localStorageService,
-                      ),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'See All',
-                  style: TextStyle(
-                    color: AppTheme.primaryColor,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 220, // Height for the horizontal list of content cards
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: contentList.length,
-            itemBuilder: (context, index) {
-              final content = contentList[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: ContentCard(
-                  imageUrl: content['thumbNail'] != null && content['thumbNail'].toString().isNotEmpty
-                      ? content['thumbNail'].toString().startsWith('http')
-                          ? content['thumbNail'].toString()
-                          : content['thumbNail'].toString().startsWith('/thumbnails')
-                              ? 'https://ethionetflix.hopto.org${content['thumbNail']}'
-                              : content['thumbNail'].toString()
-                      : content['poster_url'] != null && content['poster_url'].toString().isNotEmpty
-                          ? content['poster_url'].toString()
-                          : 'https://via.placeholder.com/300x450',
-                  title: content['name'] ?? content['title'] ?? 'No Title',
-                  type: content['type'],
-                  year: content['year'],
-                  quality: content['quality'] ?? 'HD',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DetailScreen(
-                          content: content,
-                          apiService: _apiService,
-                          localStorageService: widget.localStorageService,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                          );
-                        },
-                      ),
-      ),
-        const SizedBox(height: 20),
-      ],
-    );
+    if (poster.isNotEmpty && poster.startsWith('http')) {
+      return poster;
+    }
+    return 'assets/images/default_poster.png';
   }
 }

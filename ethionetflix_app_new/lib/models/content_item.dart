@@ -17,6 +17,17 @@ class ContentItem {
   final List<String>? genres;
   final List<String>? countries;
   
+  // Series-specific fields
+  @JsonKey(name: 'series_id')
+  final String? seriesId;
+  @JsonKey(name: 'series_name')
+  final String? seriesName;
+  @JsonKey(name: 'episode_number')
+  final int? episodeNumber;
+  @JsonKey(name: 'season_number')
+  final int? seasonNumber;
+  final int? episode;
+  
   // Make releaseYear dynamic to handle both string and int types
   @JsonKey(name: 'release_year')
   final dynamic releaseYear;
@@ -42,6 +53,11 @@ class ContentItem {
     this.quality,
     this.genres,
     this.countries,
+    this.seriesId,
+    this.seriesName,
+    this.episodeNumber,
+    this.seasonNumber,
+    this.episode,
     this.releaseYear,
     this.imdbRating,
     this.duration,
